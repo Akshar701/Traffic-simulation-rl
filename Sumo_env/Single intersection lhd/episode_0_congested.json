@@ -3,21 +3,21 @@
   "episode": 0,
   "scenario": "congested",
   "metrics": {
-    "total_vehicles": 482,
-    "avg_speed": 7.332648676641742,
+    "total_vehicles": 469,
+    "avg_speed": 8.151871709306636,
     "max_queue_length": 0.0,
     "avg_queue_length": 0.0,
     "total_waiting_time": 0,
     "avg_waiting_time": 0.0,
-    "throughput": 482,
+    "throughput": 469,
     "density": 0.0,
     "max_waiting_time": 0.0,
     "total_stopped_time": 0,
     "avg_stopped_time": 0.0,
     "episode": 0,
     "scenario": "congested",
-    "efficiency_score": 94.66529735328348,
+    "efficiency_score": 96.30374341861327,
     "congestion_level": "LOW"
   },
-  "timestamp": "2025-09-01T11:34:41.922095"
+  "timestamp": "2025-09-01T22:54:03.611727"
 }
