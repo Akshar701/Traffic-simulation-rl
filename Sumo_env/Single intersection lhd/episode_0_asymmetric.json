@@ -1,0 +1,23 @@
+{
+  "status": "success",
+  "episode": 0,
+  "scenario": "asymmetric",
+  "metrics": {
+    "total_vehicles": 373,
+    "avg_speed": 12.09987208008899,
+    "max_queue_length": 0.0,
+    "avg_queue_length": 0.0,
+    "total_waiting_time": 0,
+    "avg_waiting_time": 0.0,
+    "throughput": 373,
+    "density": 0.0,
+    "max_waiting_time": 0.0,
+    "total_stopped_time": 0,
+    "avg_stopped_time": 0.0,
+    "episode": 0,
+    "scenario": "asymmetric",
+    "efficiency_score": 100,
+    "congestion_level": "LOW"
+  },
+  "timestamp": "2025-09-01T02:03:21.375476"
+}
