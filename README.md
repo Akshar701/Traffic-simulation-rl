@@ -5,6 +5,9 @@ A modular traffic signal control system using SUMO simulation and reinforcement 
 ## 📁 **Project Structure**
 
 ```
+├── agents/
+│   ├── __init__.py          # Agents package
+│   └── dqn_agent.py         # Enhanced DQN agent
 ├── envs/
 │   ├── __init__.py          # Environment package
 │   └── traffic_env.py       # Gym-compatible traffic environment
@@ -19,6 +22,8 @@ A modular traffic signal control system using SUMO simulation and reinforcement 
 ├── live_dashboard.py        # Real-time monitoring dashboard
 ├── live_metrics.py          # Live metrics collection
 ├── generate_traffic.py      # Traffic generation utilities
+├── train_dqn.py             # DQN training script
+├── test_dqn_agent.py        # DQN agent testing
 ├── requirements.txt         # Python dependencies
 └── README.md               # This file
 ```
@@ -53,7 +58,29 @@ state, reward, done, info = env.step(action)
 env.close()
 ```
 
+### **Train DQN Agent**
+```python
+from agents.dqn_agent import DQNAgent
+from envs.traffic_env import TrafficEnv
+
+# Create environment and agent
+env = TrafficEnv()
+agent = DQNAgent(state_size=24, action_size=4)
+
+# Train for one episode
+total_reward, steps, step_rewards = agent.train_episode(env)
+
+# Save trained agent
+agent.save("trained_model.pth")
+```
+
 ## 🎯 **Key Features**
+
+### **Enhanced DQN Agent**
+- **Neural Network**: 24→256→256→4 MLP with ReLU activation
+- **Experience Replay**: 10,000 experience buffer for stable learning
+- **Target Network**: Separate network for stable Q-value estimation
+- **Epsilon-Greedy**: Exploration strategy with decay (1.0 → 0.01)
 
 ### **Gym-Compatible Environment**
 - **State Space**: 24-dimensional vector (queue length + waiting time per lane)
@@ -98,6 +125,10 @@ env.close()
 
 ### **Testing**
 ```python
+# Test DQN agent
+python3 test_dqn_agent.py
+
+# Test environment
 from envs.traffic_env import TrafficEnv
 env = TrafficEnv()
 state = env.reset()
@@ -123,6 +154,6 @@ This project is licensed under the MIT License - see the `LICENSE` file for deta
 
 ---
 
-**Status**: ✅ **Ready for RL Agent Development**
+**Status**: ✅ **DQN Agent Implemented & Ready**
 
-The repository is clean, organized, and ready for reinforcement learning model implementation.
+The repository now includes a complete Enhanced DQN agent with training infrastructure.
