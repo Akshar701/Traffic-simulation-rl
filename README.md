@@ -1,6 +1,6 @@
 # Traffic Simulation & RL - Hackathon Project
 
-A traffic simulation and reinforcement learning system for intelligent traffic signal control using SUMO.
+A real-time traffic simulation and reinforcement learning system for intelligent traffic signal control using SUMO.
 
 ## 🚀 Quick Start
 
@@ -13,30 +13,41 @@ A traffic simulation and reinforcement learning system for intelligent traffic s
 # Install dependencies
 pip install -r requirements.txt
 
-# Run demo
-python demo_rl_training.py
+# Test the system
+python test_traci_integration.py
+
+# Run live dashboard
+python live_dashboard.py
 ```
 
 ## 📁 Project Structure
 
-- `Sumo_env/` - SUMO simulation files and configurations
-- `dashboard_*.py` - Dashboard and metrics visualization
+### Core Components
+- `traci_manager.py` - SUMO simulation connection and control
+- `live_metrics.py` - Real-time traffic data collection
+- `signal_controller.py` - Intelligent signal control logic
+- `live_dashboard.py` - Real-time monitoring dashboard
+
+### Simulation Files
+- `Sumo_env/` - SUMO configuration and network files
 - `generate_traffic.py` - Traffic generation utilities
 - `demo_rl_training.py` - RL training demonstration
-- `traffic_api.py` - API endpoints
+
+### Documentation
+- `TEAM_COLLABORATION.md` - Team workflow guide
+- `PROJECT_STATUS.md` - Current project status
 
 ## 🔧 Key Features
 
-- Multi-scenario traffic simulation (uniform, asymmetric, tidal, congested)
-- Reinforcement learning for traffic signal optimization
-- Real-time dashboard monitoring
-- Configurable traffic patterns
+- **Real-time traffic monitoring** with live metrics
+- **Adaptive signal control** based on traffic conditions
+- **Interactive dashboard** for traffic authorities
+- **Multiple traffic scenarios** (uniform, tidal, asymmetric, congested)
+- **RL-ready environment** for AI agent development
 
 ## 👥 Team Collaboration
 
-- Create feature branches for your work
-- Test changes before pushing
-- Update this README with new features
+See `TEAM_COLLABORATION.md` for detailed workflow and contribution guidelines.
 
 ## 📊 Current Status
 

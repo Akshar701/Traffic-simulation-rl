@@ -52,6 +52,9 @@ Thumbs.db
 *.rou.bak
 *.net.bak
 *.sumocfg.bak
+*.sumocfg.bak
+*.rou.xml.bak
+*.net.xml.bak
 
 # Jupyter Notebook
 .ipynb_checkpoints
