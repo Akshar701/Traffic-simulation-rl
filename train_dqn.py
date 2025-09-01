@@ -59,29 +59,146 @@ class DQNTrainer:
         # Training tracking
         self.training_history = []
         self.evaluation_history = []
+        self.start_time = None
+        
+    def print_training_header(self, episodes: int, eval_freq: int, save_freq: int):
+        """Print training header with configuration"""
+        print("🚦" + "="*60)
+        print("🚀 DQN TRAINING FOR TRAFFIC SIGNAL CONTROL")
+        print("="*60)
+        print(f"📊 Training Configuration:")
+        print(f"   • Episodes: {episodes}")
+        print(f"   • Evaluation Frequency: Every {eval_freq} episodes")
+        print(f"   • Model Save Frequency: Every {save_freq} episodes")
+        print(f"   • Max Steps per Episode: {self.config.get('max_steps', 1000)}")
+        print(f"   • Learning Rate: {self.config.get('learning_rate', 1e-4)}")
+        print(f"   • Initial Epsilon: {self.config.get('epsilon', 1.0)}")
+        print(f"   • Target Network Update: Every {self.config.get('target_update_freq', 1000)} steps")
+        print("="*60)
+        
+    def print_episode_progress(self, episode: int, total_reward: float, steps: int, 
+                              epsilon: float, recent_rewards: List[float], 
+                              training_loss: Optional[float] = None):
+        """Print detailed episode progress"""
+        # Calculate performance metrics
+        avg_reward = np.mean(recent_rewards) if recent_rewards else 0
+        reward_trend = "↗️" if len(recent_rewards) >= 2 and recent_rewards[-1] > recent_rewards[-2] else "↘️"
+        
+        # Determine performance level
+        if total_reward > -20:
+            performance = "🟢 EXCELLENT"
+        elif total_reward > -50:
+            performance = "🟡 GOOD"
+        elif total_reward > -100:
+            performance = "🟠 FAIR"
+        else:
+            performance = "🔴 POOR"
+        
+        # Print episode summary
+        print(f"Episode {episode:4d} | {performance}")
+        print(f"   📈 Reward: {total_reward:7.2f} {reward_trend}")
+        print(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}")
+        print(f"   📊 Avg (10): {avg_reward:7.2f}")
+        
+        if training_loss is not None:
+            print(f"   🧠 Loss: {training_loss:.6f}")
+        
+        # Print action distribution if available
+        if hasattr(self.agent, 'recent_actions') and self.agent.recent_actions:
+            action_counts = {}
+            for action in self.agent.recent_actions[-steps:]:
+                action_counts[action] = action_counts.get(action, 0) + 1
+            
+            action_dist = []
+            for i in range(4):
+                count = action_counts.get(i, 0)
+                percentage = (count / steps) * 100 if steps > 0 else 0
+                action_dist.append(f"{self.agent.get_action_name(i)}: {percentage:.1f}%")
+            
+            print(f"   🚦 Actions: {' | '.join(action_dist)}")
+        
+        print("-" * 60)
+        
+    def print_evaluation_results(self, episode: int, eval_results: Dict):
+        """Print evaluation results in a user-friendly format"""
+        mean_reward = eval_results['mean_reward']
+        std_reward = eval_results['std_reward']
+        mean_steps = eval_results['mean_steps']
+        
+        # Determine evaluation performance
+        if mean_reward > -20:
+            eval_performance = "🟢 EXCELLENT"
+        elif mean_reward > -50:
+            eval_performance = "🟡 GOOD"
+        elif mean_reward > -100:
+            eval_performance = "🟠 FAIR"
+        else:
+            eval_performance = "🔴 POOR"
+        
+        print(f"📊 EVALUATION at Episode {episode} | {eval_performance}")
+        print(f"   🎯 Mean Reward: {mean_reward:7.2f} ± {std_reward:.2f}")
+        print(f"   ⏱️  Mean Steps: {mean_steps:.1f}")
+        print(f"   📈 Individual Episodes: {eval_results['episode_rewards']}")
+        print("="*60)
+        
+    def print_training_summary(self, training_time: float, total_episodes: int):
+        """Print training summary"""
+        print("\n🎉 TRAINING COMPLETED!")
+        print("="*60)
+        print(f"⏱️  Total Time: {training_time:.2f} seconds")
+        print(f"📊 Episodes Trained: {total_episodes}")
+        print(f"🧠 Final Epsilon: {self.agent.epsilon:.3f}")
+        print(f"💾 Models Saved: {len([f for f in os.listdir(self.models_dir) if f.endswith('.pth')])}")
+        
+        # Performance analysis
+        if self.training_history:
+            recent_rewards = [h['total_reward'] for h in self.training_history[-50:]]
+            initial_avg = np.mean([h['total_reward'] for h in self.training_history[:50]])
+            final_avg = np.mean(recent_rewards)
+            improvement = final_avg - initial_avg
+            
+            print(f"\n📈 Performance Analysis:")
+            print(f"   🎯 Initial Average Reward: {initial_avg:.2f}")
+            print(f"   🎯 Final Average Reward: {final_avg:.2f}")
+            print(f"   📈 Improvement: {improvement:+.2f}")
+            
+            if improvement > 0:
+                print(f"   ✅ Agent is learning and improving!")
+            else:
+                print(f"   ⚠️  Agent may need more training or hyperparameter tuning")
+        
+        print("="*60)
         
     def train(self, episodes: int, eval_freq: int = 50, save_freq: int = 100):
         """
-        Train the DQN agent
+        Train the DQN agent with enhanced user feedback
         
         Args:
             episodes: Number of episodes to train
             eval_freq: Frequency of evaluation
             save_freq: Frequency of model saving
         """
-        print(f"🚀 Starting DQN Training")
-        print(f"📊 Episodes: {episodes}")
-        print(f"🔍 Evaluation frequency: {eval_freq}")
-        print(f"💾 Save frequency: {save_freq}")
-        print("=" * 50)
+        self.print_training_header(episodes, eval_freq, save_freq)
         
-        start_time = time.time()
+        self.start_time = time.time()
+        recent_rewards = []
+        
+        print("🚀 Starting training...")
+        print("💡 The agent will start with random exploration (epsilon = 1.0)")
+        print("💡 As training progresses, it will learn and reduce exploration")
+        print("💡 Watch for improving rewards and more consistent performance")
+        print("-" * 60)
         
         for episode in range(episodes):
             # Train one episode
             total_reward, steps, step_rewards = self.agent.train_episode(
                 self.env, max_steps=self.config.get('max_steps', 1000)
             )
+            
+            # Track recent rewards for trend analysis
+            recent_rewards.append(total_reward)
+            if len(recent_rewards) > 10:
+                recent_rewards.pop(0)
             
             # Record training data
             training_data = {
@@ -94,18 +211,15 @@ class DQNTrainer:
             }
             self.training_history.append(training_data)
             
-            # Print progress
-            if (episode + 1) % 10 == 0:
-                recent_rewards = [h['total_reward'] for h in self.training_history[-10:]]
-                avg_reward = np.mean(recent_rewards)
-                print(f"Episode {episode + 1:4d} | "
-                      f"Reward: {total_reward:6.2f} | "
-                      f"Steps: {steps:3d} | "
-                      f"Epsilon: {self.agent.epsilon:.3f} | "
-                      f"Avg (10): {avg_reward:.2f}")
+            # Print progress every episode for better visibility
+            self.print_episode_progress(
+                episode + 1, total_reward, steps, self.agent.epsilon, 
+                recent_rewards[-10:], None  # We'll add loss tracking later
+            )
             
             # Evaluate periodically
             if (episode + 1) % eval_freq == 0:
+                print(f"🔍 Running evaluation...")
                 eval_results = self.evaluate(episodes=5)
                 self.evaluation_history.append({
                     'episode': episode + 1,
@@ -113,22 +227,21 @@ class DQNTrainer:
                     'timestamp': datetime.now().isoformat()
                 })
                 
-                print(f"📈 Evaluation at episode {episode + 1}: "
-                      f"Mean reward: {eval_results['mean_reward']:.2f} ± {eval_results['std_reward']:.2f}")
+                self.print_evaluation_results(episode + 1, eval_results)
             
             # Save model periodically
             if (episode + 1) % save_freq == 0:
                 model_path = os.path.join(self.models_dir, f"dqn_episode_{episode + 1}.pth")
                 self.agent.save(model_path)
-                print(f"💾 Model saved: {model_path}")
+                print(f"💾 Model checkpoint saved: {model_path}")
+                print("-" * 60)
         
         # Final save
         final_model_path = os.path.join(self.models_dir, "dqn_final.pth")
         self.agent.save(final_model_path)
         
-        training_time = time.time() - start_time
-        print(f"\n🎉 Training completed in {training_time:.2f} seconds")
-        print(f"📁 Final model saved: {final_model_path}")
+        training_time = time.time() - self.start_time
+        self.print_training_summary(training_time, episodes)
         
         # Save training results
         self.save_training_results()
@@ -228,10 +341,13 @@ class DQNTrainer:
         print(f"✅ Model loaded: {model_path}")
     
     def test_agent(self, episodes: int = 5):
-        """Test the trained agent"""
-        print(f"🧪 Testing agent over {episodes} episodes...")
+        """Test the trained agent with detailed output"""
+        print(f"🧪 Testing trained agent over {episodes} episodes...")
+        print("="*60)
         
         test_results = []
+        total_rewards = []
+        
         for episode in range(episodes):
             state = self.env.reset()
             total_reward = 0
@@ -250,23 +366,56 @@ class DQNTrainer:
                 if done:
                     break
             
+            # Calculate action distribution
+            action_counts = {}
+            for action in actions_taken:
+                action_counts[action] = action_counts.get(action, 0) + 1
+            
             test_results.append({
                 'episode': episode + 1,
                 'total_reward': total_reward,
                 'steps': steps,
                 'actions_taken': actions_taken,
-                'action_counts': {action: actions_taken.count(action) for action in range(4)}
+                'action_counts': action_counts
             })
             
-            print(f"Episode {episode + 1}: Reward {total_reward:.2f}, Steps {steps}")
+            total_rewards.append(total_reward)
+            
+            # Print episode results
+            print(f"Episode {episode + 1}:")
+            print(f"   📈 Reward: {total_reward:.2f}")
+            print(f"   ⏱️  Steps: {steps}")
+            
+            # Print action distribution
+            action_dist = []
+            for i in range(4):
+                count = action_counts.get(i, 0)
+                percentage = (count / steps) * 100 if steps > 0 else 0
+                action_dist.append(f"{self.agent.get_action_name(i)}: {percentage:.1f}%")
+            print(f"   🚦 Actions: {' | '.join(action_dist)}")
+            print("-" * 40)
         
         # Print summary
-        avg_reward = np.mean([r['total_reward'] for r in test_results])
+        avg_reward = np.mean(total_rewards)
         avg_steps = np.mean([r['steps'] for r in test_results])
         
-        print(f"\n📊 Test Summary:")
-        print(f"   Average Reward: {avg_reward:.2f}")
-        print(f"   Average Steps: {avg_steps:.1f}")
+        print(f"\n📊 TEST SUMMARY:")
+        print(f"   🎯 Average Reward: {avg_reward:.2f}")
+        print(f"   ⏱️  Average Steps: {avg_steps:.1f}")
+        print(f"   📈 Best Episode: {max(total_rewards):.2f}")
+        print(f"   📉 Worst Episode: {min(total_rewards):.2f}")
+        
+        # Performance assessment
+        if avg_reward > -20:
+            print(f"   🟢 Performance: EXCELLENT")
+        elif avg_reward > -50:
+            print(f"   🟡 Performance: GOOD")
+        elif avg_reward > -100:
+            print(f"   🟠 Performance: FAIR")
+        else:
+            print(f"   🔴 Performance: POOR")
+        
+        print("="*60)
         
         return test_results
 

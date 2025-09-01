@@ -157,6 +157,7 @@ class DQNAgent:
         self.episode_count = 0
         self.training_losses = []
         self.episode_rewards = []
+        self.recent_actions = []  # Track recent actions for analysis
         
         # Action mapping
         self.action_names = {
@@ -179,13 +180,20 @@ class DQNAgent:
         """
         if training and random.random() < self.epsilon:
             # Random action (exploration)
-            return random.randrange(self.action_size)
+            action = random.randrange(self.action_size)
+        else:
+            # Greedy action (exploitation)
+            with torch.no_grad():
+                state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+                q_values = self.q_network(state_tensor)
+                action = q_values.argmax().item()
         
-        # Greedy action (exploitation)
-        with torch.no_grad():
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-            q_values = self.q_network(state_tensor)
-            return q_values.argmax().item()
+        # Track action for analysis
+        self.recent_actions.append(action)
+        if len(self.recent_actions) > 1000:  # Keep last 1000 actions
+            self.recent_actions.pop(0)
+        
+        return action
     
     def remember(self, state: np.ndarray, action: int, reward: float, 
                 next_state: np.ndarray, done: bool):
