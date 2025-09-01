@@ -1,54 +1,128 @@
-# Traffic Simulation & RL - Hackathon Project
+# 🚦 Traffic Signal Control with Reinforcement Learning
 
-A real-time traffic simulation and reinforcement learning system for intelligent traffic signal control using SUMO.
+A modular traffic signal control system using SUMO simulation and reinforcement learning for intelligent traffic management.
 
-## 🚀 Quick Start
+## 📁 **Project Structure**
 
-### Prerequisites
-- Python 3.8+
-- SUMO (install with `brew install sumo` on macOS)
-
-### Setup
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Test the system
-python test_traci_integration.py
-
-# Run live dashboard
-python live_dashboard.py
+```
+├── envs/
+│   ├── __init__.py          # Environment package
+│   └── traffic_env.py       # Gym-compatible traffic environment
+├── utils/
+│   ├── __init__.py          # Utilities package
+│   ├── state_utils.py       # State extraction utilities
+│   └── reward_utils.py      # Reward calculation utilities
+├── Sumo_env/
+│   └── Single intersection lhd/  # SUMO simulation files
+├── traci_manager.py         # SUMO TraCI interface
+├── signal_controller.py     # Traffic signal control logic
+├── live_dashboard.py        # Real-time monitoring dashboard
+├── live_metrics.py          # Live metrics collection
+├── generate_traffic.py      # Traffic generation utilities
+├── requirements.txt         # Python dependencies
+└── README.md               # This file
 ```
 
-## 📁 Project Structure
+## 🚀 **Quick Start**
 
-### Core Components
-- `traci_manager.py` - SUMO simulation connection and control
-- `live_metrics.py` - Real-time traffic data collection
-- `signal_controller.py` - Intelligent signal control logic
-- `live_dashboard.py` - Real-time monitoring dashboard
+### **Installation**
+```bash
+pip install -r requirements.txt
+```
 
-### Simulation Files
-- `Sumo_env/` - SUMO configuration and network files
-- `generate_traffic.py` - Traffic generation utilities
-- `demo_rl_training.py` - RL training demonstration
+### **Run Dashboard**
+```bash
+python3 live_dashboard.py
+```
 
-### Documentation
-- `TEAM_COLLABORATION.md` - Team workflow guide
-- `PROJECT_STATUS.md` - Current project status
+### **Use Environment for RL**
+```python
+from envs.traffic_env import TrafficEnv
 
-## 🔧 Key Features
+# Create environment
+env = TrafficEnv()
 
-- **Real-time traffic monitoring** with live metrics
-- **Adaptive signal control** based on traffic conditions
-- **Interactive dashboard** for traffic authorities
-- **Multiple traffic scenarios** (uniform, tidal, asymmetric, congested)
-- **RL-ready environment** for AI agent development
+# Reset for new episode
+state = env.reset()
 
-## 👥 Team Collaboration
+# Take action
+action = 0  # NS Green
+state, reward, done, info = env.step(action)
 
-See `TEAM_COLLABORATION.md` for detailed workflow and contribution guidelines.
+# Close environment
+env.close()
+```
 
-## 📊 Current Status
+## 🎯 **Key Features**
 
-See `PROJECT_STATUS.md` for detailed project status and next steps.
+### **Gym-Compatible Environment**
+- **State Space**: 24-dimensional vector (queue length + waiting time per lane)
+- **Action Space**: 4 discrete actions (NS Green, EW Green, Extend, Skip)
+- **Reward Function**: Multi-component based on efficiency, throughput, waiting time
+
+### **Modular Architecture**
+- **State Utils**: Extract traffic state information
+- **Reward Utils**: Calculate rewards with CSV logging
+- **Environment**: Clean gym interface for RL algorithms
+
+### **Real-time Monitoring**
+- Live dashboard with metrics visualization
+- Performance charts and signal control
+- Multiple traffic scenarios (uniform, tidal, asymmetric, congested)
+
+## 📊 **Environment Details**
+
+### **State Representation**
+24-dimensional vector containing:
+- Queue length per lane (12 values)
+- Cumulative waiting time per lane (12 values)
+
+### **Actions**
+- **0**: North-South Green (30s)
+- **1**: East-West Green (30s)  
+- **2**: Extend Current Phase (+10s)
+- **3**: Skip to Next Phase
+
+### **Reward Components**
+- **Waiting Time Change**: 40% weight
+- **Queue Penalty**: 20% weight
+- **Throughput Reward**: 25% weight
+- **Efficiency Reward**: 15% weight
+
+## 🔧 **Development**
+
+### **Adding New Features**
+- **State**: Modify `utils/state_utils.py`
+- **Reward**: Modify `utils/reward_utils.py`
+- **Environment**: Modify `envs/traffic_env.py`
+
+### **Testing**
+```python
+from envs.traffic_env import TrafficEnv
+env = TrafficEnv()
+state = env.reset()
+# Test your changes here
+env.close()
+```
+
+## 📈 **Performance Metrics**
+
+The system tracks:
+- **Efficiency Score**: Overall traffic flow performance
+- **Average Waiting Time**: Vehicle waiting times
+- **Queue Length**: Number of stopped vehicles
+- **Throughput**: Average vehicle speed and count
+
+## 🤝 **Contributing**
+
+See `CONTRIBUTING.md` for development guidelines and team collaboration information.
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the `LICENSE` file for details.
+
+---
+
+**Status**: ✅ **Ready for RL Agent Development**
+
+The repository is clean, organized, and ready for reinforcement learning model implementation.
