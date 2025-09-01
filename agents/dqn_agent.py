@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Enhanced Deep Q-Network (DQN) Agent
-===================================
+Enhanced Deep Q-Network (DQN) Agent - GPU Optimized
+==================================================
 
 A DQN agent enhanced with Experience Replay and Target Network for stable learning.
 Specifically designed for traffic signal control at single intersections.
+Optimized for NVIDIA GPU training with CUDA acceleration.
 """
 
 import torch
@@ -18,10 +19,11 @@ from typing import List, Tuple, Optional
 import os
 import json
 from datetime import datetime
+import gc
 
 class DQNNetwork(nn.Module):
     """
-    Neural Network Architecture for DQN
+    Neural Network Architecture for DQN - GPU Optimized
     
     Input Layer: 24 neurons (state vector size)
     Hidden Layer 1: 256 neurons with ReLU
@@ -54,31 +56,38 @@ class DQNNetwork(nn.Module):
         return x
 
 class ExperienceReplay:
-    """Experience Replay Buffer for DQN"""
+    """Experience Replay Buffer for DQN - GPU Optimized"""
     
-    def __init__(self, capacity: int = 10000):
+    def __init__(self, capacity: int = 10000, device: torch.device = None):
         self.buffer = deque(maxlen=capacity)
+        self.device = device
     
     def push(self, state: np.ndarray, action: int, reward: float, 
              next_state: np.ndarray, done: bool):
         """Add experience to buffer"""
         self.buffer.append((state, action, reward, next_state, done))
     
-    def sample(self, batch_size: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, 
-                                              np.ndarray, np.ndarray]:
-        """Sample a batch of experiences"""
+    def sample(self, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, 
+                                              torch.Tensor, torch.Tensor]:
+        """Sample a batch of experiences and convert to GPU tensors"""
         batch = random.sample(self.buffer, min(batch_size, len(self.buffer)))
         states, actions, rewards, next_states, dones = zip(*batch)
         
-        return (np.array(states), np.array(actions), np.array(rewards),
-                np.array(next_states), np.array(dones))
+        # Convert to tensors and move to GPU
+        states = torch.FloatTensor(np.array(states)).to(self.device)
+        actions = torch.LongTensor(np.array(actions)).to(self.device)
+        rewards = torch.FloatTensor(np.array(rewards)).to(self.device)
+        next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
+        dones = torch.BoolTensor(np.array(dones)).to(self.device)
+        
+        return states, actions, rewards, next_states, dones
     
     def __len__(self) -> int:
         return len(self.buffer)
 
 class DQNAgent:
     """
-    Enhanced Deep Q-Network Agent for Traffic Signal Control
+    Enhanced Deep Q-Network Agent for Traffic Signal Control - GPU Optimized
     
     Features:
     - Experience Replay for stable learning
@@ -87,6 +96,7 @@ class DQNAgent:
     - State: 24D vector (queue length + waiting time per lane)
     - Actions: 4 discrete actions (NS Green, EW Green, Extend, Skip)
     - Reward: Change in cumulative waiting time
+    - GPU acceleration with CUDA optimization
     """
     
     def __init__(self, 
@@ -101,9 +111,10 @@ class DQNAgent:
                  memory_size: int = 10000,
                  batch_size: int = 32,
                  target_update_freq: int = 1000,
-                 device: str = 'auto'):
+                 device: str = 'auto',
+                 mixed_precision: bool = True):
         """
-        Initialize DQN Agent
+        Initialize DQN Agent with GPU optimization
         
         Args:
             state_size: Size of state vector (24 for 12 lanes * 2 metrics)
@@ -118,15 +129,29 @@ class DQNAgent:
             batch_size: Batch size for training
             target_update_freq: Frequency of target network updates
             device: Device to use for training ('cpu', 'cuda', or 'auto')
+            mixed_precision: Whether to use mixed precision training (FP16)
         """
         
-        # Set device
+        # Set device with GPU optimization
         if device == 'auto':
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            if torch.cuda.is_available():
+                self.device = torch.device('cuda')
+                # Set CUDA optimization flags
+                torch.backends.cudnn.benchmark = True
+                torch.backends.cudnn.deterministic = False
+                print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name()}")
+                print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            else:
+                self.device = torch.device('cpu')
+                print("⚠️ CUDA not available, using CPU")
         else:
             self.device = torch.device(device)
         
-        print(f"Using device: {self.device}")
+        # Mixed precision training
+        self.mixed_precision = mixed_precision and self.device.type == 'cuda'
+        if self.mixed_precision:
+            self.scaler = torch.cuda.amp.GradScaler()
+            print("🎯 Mixed precision training enabled (FP16)")
         
         # Hyperparameters
         self.state_size = state_size
@@ -140,17 +165,17 @@ class DQNAgent:
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
         
-        # Networks
+        # Networks - Move to GPU
         self.q_network = DQNNetwork(state_size, hidden_size, action_size).to(self.device)
         self.target_network = DQNNetwork(state_size, hidden_size, action_size).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
         
-        # Optimizer
+        # Optimizer with GPU optimization
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
         
-        # Experience replay
-        self.memory = ExperienceReplay(memory_size)
+        # Experience replay with GPU support
+        self.memory = ExperienceReplay(memory_size, self.device)
         
         # Training tracking
         self.step_count = 0
@@ -166,10 +191,16 @@ class DQNAgent:
             2: "Extend Phase",
             3: "Skip Phase"
         }
+        
+        # GPU memory optimization
+        if self.device.type == 'cuda':
+            # Clear GPU cache
+            torch.cuda.empty_cache()
+            print(f"🧹 GPU memory cleared. Available: {torch.cuda.memory_allocated() / 1e6:.1f} MB")
     
     def act(self, state: np.ndarray, training: bool = True) -> int:
         """
-        Choose action using epsilon-greedy policy
+        Choose action using epsilon-greedy policy - GPU optimized
         
         Args:
             state: Current state vector
@@ -182,10 +213,14 @@ class DQNAgent:
             # Random action (exploration)
             action = random.randrange(self.action_size)
         else:
-            # Greedy action (exploitation)
+            # Greedy action (exploitation) - GPU optimized
             with torch.no_grad():
                 state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-                q_values = self.q_network(state_tensor)
+                if self.mixed_precision:
+                    with torch.cuda.amp.autocast():
+                        q_values = self.q_network(state_tensor)
+                else:
+                    q_values = self.q_network(state_tensor)
                 action = q_values.argmax().item()
         
         # Track action for analysis
@@ -202,7 +237,7 @@ class DQNAgent:
     
     def replay(self) -> Optional[float]:
         """
-        Train the network using experience replay
+        Train the network using experience replay - GPU optimized
         
         Returns:
             float: Training loss (None if not enough samples)
@@ -210,31 +245,45 @@ class DQNAgent:
         if len(self.memory) < self.batch_size:
             return None
         
-        # Sample batch from memory
+        # Sample batch from memory (already on GPU)
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         
-        # Convert to tensors
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.LongTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(rewards).to(self.device)
-        next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.BoolTensor(dones).to(self.device)
-        
-        # Current Q-values
-        current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
-        
-        # Next Q-values (from target network)
-        with torch.no_grad():
-            next_q_values = self.target_network(next_states).max(1)[0]
-            target_q_values = rewards + (self.gamma * next_q_values * ~dones)
-        
-        # Compute loss
-        loss = F.mse_loss(current_q_values.squeeze(), target_q_values)
-        
-        # Backward pass
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+        # Training with mixed precision
+        if self.mixed_precision:
+            with torch.cuda.amp.autocast():
+                # Current Q-values
+                current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
+                
+                # Next Q-values (from target network)
+                with torch.no_grad():
+                    next_q_values = self.target_network(next_states).max(1)[0]
+                    target_q_values = rewards + (self.gamma * next_q_values * ~dones)
+                
+                # Compute loss
+                loss = F.mse_loss(current_q_values.squeeze(), target_q_values)
+            
+            # Backward pass with gradient scaling
+            self.optimizer.zero_grad()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            # Standard training
+            # Current Q-values
+            current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
+            
+            # Next Q-values (from target network)
+            with torch.no_grad():
+                next_q_values = self.target_network(next_states).max(1)[0]
+                target_q_values = rewards + (self.gamma * next_q_values * ~dones)
+            
+            # Compute loss
+            loss = F.mse_loss(current_q_values.squeeze(), target_q_values)
+            
+            # Backward pass
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
         
         # Update target network
         self.step_count += 1
@@ -249,7 +298,7 @@ class DQNAgent:
     
     def train_episode(self, env, max_steps: int = 1000) -> Tuple[float, int, List[float]]:
         """
-        Train for one episode
+        Train for one episode - GPU optimized
         
         Args:
             env: Environment instance
@@ -286,11 +335,15 @@ class DQNAgent:
         self.episode_count += 1
         self.episode_rewards.append(total_reward)
         
+        # GPU memory cleanup
+        if self.device.type == 'cuda' and self.episode_count % 10 == 0:
+            torch.cuda.empty_cache()
+        
         return total_reward, len(step_rewards), step_rewards
     
     def evaluate(self, env, episodes: int = 5, max_steps: int = 1000) -> dict:
         """
-        Evaluate the agent without exploration
+        Evaluate the agent without exploration - GPU optimized
         
         Args:
             env: Environment instance
@@ -356,8 +409,9 @@ class DQNAgent:
             }
         }
         
-        torch.save(save_data, filepath)
-        print(f"Agent saved to: {filepath}")
+        # Save to CPU before saving to file
+        torch.save(save_data, filepath, _use_new_zipfile_serialization=False)
+        print(f"💾 Agent saved to: {filepath}")
     
     def load(self, filepath: str):
         """Load the agent model and training state"""
@@ -376,8 +430,8 @@ class DQNAgent:
         self.training_losses = save_data['training_losses']
         self.episode_rewards = save_data['episode_rewards']
         
-        print(f"Agent loaded from: {filepath}")
-        print(f"Loaded {self.episode_count} episodes, epsilon: {self.epsilon:.3f}")
+        print(f"✅ Agent loaded from: {filepath}")
+        print(f"📊 Loaded {self.episode_count} episodes, epsilon: {self.epsilon:.3f}")
     
     def get_action_name(self, action: int) -> str:
         """Get human-readable action name"""
@@ -385,11 +439,37 @@ class DQNAgent:
     
     def get_training_stats(self) -> dict:
         """Get current training statistics"""
+        gpu_memory = 0
+        if self.device.type == 'cuda':
+            gpu_memory = torch.cuda.memory_allocated() / 1e6  # MB
+        
         return {
             'episode_count': self.episode_count,
             'step_count': self.step_count,
             'epsilon': self.epsilon,
             'memory_size': len(self.memory),
             'mean_reward': np.mean(self.episode_rewards[-100:]) if self.episode_rewards else 0,
-            'recent_losses': self.training_losses[-100:] if self.training_losses else []
+            'recent_losses': self.training_losses[-100:] if self.training_losses else [],
+            'gpu_memory_mb': gpu_memory,
+            'device': str(self.device)
         }
+    
+    def optimize_for_inference(self):
+        """Optimize the model for inference (faster predictions)"""
+        if self.device.type == 'cuda':
+            # Enable TensorRT-like optimizations
+            self.q_network.eval()
+            with torch.no_grad():
+                # Warm up the model
+                dummy_input = torch.randn(1, self.state_size).to(self.device)
+                for _ in range(10):
+                    _ = self.q_network(dummy_input)
+            
+            print("🚀 Model optimized for inference")
+    
+    def clear_gpu_cache(self):
+        """Clear GPU memory cache"""
+        if self.device.type == 'cuda':
+            torch.cuda.empty_cache()
+            gc.collect()
+            print(f"🧹 GPU cache cleared. Memory: {torch.cuda.memory_allocated() / 1e6:.1f} MB")

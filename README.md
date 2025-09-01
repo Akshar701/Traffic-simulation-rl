@@ -58,14 +58,14 @@ state, reward, done, info = env.step(action)
 env.close()
 ```
 
-### **Train DQN Agent**
+### **Train DQN Agent (GPU Optimized)**
 ```python
 from agents.dqn_agent import DQNAgent
 from envs.traffic_env import TrafficEnv
 
-# Create environment and agent
+# Create environment and agent with GPU
 env = TrafficEnv()
-agent = DQNAgent(state_size=24, action_size=4)
+agent = DQNAgent(state_size=24, action_size=4, device='cuda', mixed_precision=True)
 
 # Train for one episode
 total_reward, steps, step_rewards = agent.train_episode(env)
@@ -74,13 +74,27 @@ total_reward, steps, step_rewards = agent.train_episode(env)
 agent.save("trained_model.pth")
 ```
 
+### **GPU Training Commands**
+```bash
+# Check GPU setup
+python3 check_gpu.py
+
+# Train with GPU acceleration
+python3 train_dqn.py --episodes 500 --device cuda --batch-size 64
+
+# Train with custom settings
+python3 train_dqn.py --episodes 1000 --device cuda --batch-size 128 --memory-size 20000
+```
+
 ## 🎯 **Key Features**
 
-### **Enhanced DQN Agent**
+### **Enhanced DQN Agent - GPU Optimized**
 - **Neural Network**: 24→256→256→4 MLP with ReLU activation
 - **Experience Replay**: 10,000 experience buffer for stable learning
 - **Target Network**: Separate network for stable Q-value estimation
 - **Epsilon-Greedy**: Exploration strategy with decay (1.0 → 0.01)
+- **GPU Acceleration**: CUDA support with mixed precision training (FP16)
+- **Memory Optimization**: Automatic GPU memory management and cleanup
 
 ### **Gym-Compatible Environment**
 - **State Space**: 24-dimensional vector (queue length + waiting time per lane)
@@ -123,8 +137,11 @@ agent.save("trained_model.pth")
 - **Reward**: Modify `utils/reward_utils.py`
 - **Environment**: Modify `envs/traffic_env.py`
 
-### **Testing**
+### **Testing & GPU Setup**
 ```python
+# Check GPU setup and compatibility
+python3 check_gpu.py
+
 # Test DQN agent
 python3 test_dqn_agent.py
 
@@ -154,6 +171,6 @@ This project is licensed under the MIT License - see the `LICENSE` file for deta
 
 ---
 
-**Status**: ✅ **DQN Agent Implemented & Ready**
+**Status**: ✅ **DQN Agent GPU Optimized & Ready**
 
-The repository now includes a complete Enhanced DQN agent with training infrastructure.
+The repository now includes a complete Enhanced DQN agent with GPU acceleration and training infrastructure.

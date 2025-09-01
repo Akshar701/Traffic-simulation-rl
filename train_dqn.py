@@ -14,6 +14,7 @@ import json
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -35,6 +36,9 @@ class DQNTrainer:
         os.makedirs(self.results_dir, exist_ok=True)
         os.makedirs(self.models_dir, exist_ok=True)
         
+        # Print GPU information
+        self.print_gpu_info()
+        
         # Initialize environment and agent
         self.env = TrafficEnv(
             config_file=config.get('config_file', 'Sumo_env/Single intersection lhd/uniform_simulation.sumocfg'),
@@ -53,13 +57,42 @@ class DQNTrainer:
             memory_size=config.get('memory_size', 10000),
             batch_size=config.get('batch_size', 32),
             target_update_freq=config.get('target_update_freq', 1000),
-            device=config.get('device', 'auto')
+            device=config.get('device', 'auto'),
+            mixed_precision=config.get('mixed_precision', True)
         )
         
         # Training tracking
         self.training_history = []
         self.evaluation_history = []
         self.start_time = None
+        
+    def print_gpu_info(self):
+        """Print GPU information and optimization settings"""
+        print("🚀 GPU Configuration:")
+        print("=" * 40)
+        
+        if torch.cuda.is_available():
+            print(f"✅ CUDA Available: {torch.version.cuda}")
+            print(f"🎯 GPU Device: {torch.cuda.get_device_name()}")
+            print(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            print(f"🔧 CUDA Capability: {torch.cuda.get_device_capability()}")
+            print(f"📊 GPU Count: {torch.cuda.device_count()}")
+            
+            # Memory info
+            memory_allocated = torch.cuda.memory_allocated() / 1e6
+            memory_reserved = torch.cuda.memory_reserved() / 1e6
+            print(f"💾 Memory Allocated: {memory_allocated:.1f} MB")
+            print(f"💾 Memory Reserved: {memory_reserved:.1f} MB")
+            
+            # Optimization settings
+            print(f"⚡ cuDNN Benchmark: {torch.backends.cudnn.benchmark}")
+            print(f"⚡ cuDNN Deterministic: {torch.backends.cudnn.deterministic}")
+            
+        else:
+            print("⚠️ CUDA not available - using CPU")
+            print("💡 For optimal performance, install CUDA-enabled PyTorch")
+        
+        print("=" * 40)
         
     def print_training_header(self, episodes: int, eval_freq: int, save_freq: int):
         """Print training header with configuration"""
@@ -94,10 +127,16 @@ class DQNTrainer:
         else:
             performance = "🔴 POOR"
         
+        # Get GPU memory info
+        gpu_memory = ""
+        if torch.cuda.is_available():
+            memory_mb = torch.cuda.memory_allocated() / 1e6
+            gpu_memory = f" | 🚀 GPU: {memory_mb:.1f}MB"
+        
         # Print episode summary
         print(f"Episode {episode:4d} | {performance}")
         print(f"   📈 Reward: {total_reward:7.2f} {reward_trend}")
-        print(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}")
+        print(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}{gpu_memory}")
         print(f"   📊 Avg (10): {avg_reward:7.2f}")
         
         if training_loss is not None:
@@ -429,10 +468,16 @@ def main():
                        help='SUMO config file')
     parser.add_argument('--load-model', type=str, help='Path to load existing model')
     parser.add_argument('--test-only', action='store_true', help='Only test the agent')
+    parser.add_argument('--device', type=str, default='auto', 
+                       choices=['auto', 'cuda', 'cpu'], help='Device to use for training')
+    parser.add_argument('--no-mixed-precision', action='store_true', 
+                       help='Disable mixed precision training (FP16)')
+    parser.add_argument('--batch-size', type=int, default=32, help='Batch size for training')
+    parser.add_argument('--memory-size', type=int, default=10000, help='Experience replay buffer size')
     
     args = parser.parse_args()
     
-    # Training configuration
+        # Training configuration
     config = {
         'config_file': f'Sumo_env/Single intersection lhd/{args.config}',
         'max_steps': 1000,
@@ -444,10 +489,11 @@ def main():
         'epsilon': 1.0,
         'epsilon_min': 0.01,
         'epsilon_decay': 0.995,
-        'memory_size': 10000,
-        'batch_size': 32,
+        'memory_size': args.memory_size,
+        'batch_size': args.batch_size,
         'target_update_freq': 1000,
-        'device': 'auto',
+        'device': args.device,
+        'mixed_precision': not args.no_mixed_precision,  # Enable mixed precision for GPU
         'results_dir': 'training_results',
         'models_dir': 'trained_models'
     }
