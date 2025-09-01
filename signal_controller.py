@@ -78,7 +78,7 @@ class SignalController:
         }
     
     def make_decision(self, traffic_state: TrafficState) -> SignalDecision:
-        """Make intelligent signal control decision"""
+        """Make intelligent signal control decision with improved logic"""
         # Get current signal info
         signal_info = self.get_current_signal_info()
         current_phase = signal_info["current_phase"]
@@ -88,18 +88,26 @@ class SignalController:
         if emergency_decision:
             return emergency_decision
         
-        # Check if current phase should be extended
-        extend_decision = self._check_phase_extension(traffic_state, current_phase)
+        # Check if current phase should be extended (with improved logic)
+        extend_decision = self._check_phase_extension_improved(traffic_state, current_phase)
         if extend_decision:
             return extend_decision
         
-        # Check if phase should be skipped
-        skip_decision = self._check_phase_skip(traffic_state, current_phase)
+        # Check if phase should be skipped (with improved logic)
+        skip_decision = self._check_phase_skip_improved(traffic_state, current_phase)
         if skip_decision:
             return skip_decision
         
-        # Default: proceed to next phase with standard duration
-        return self._get_next_phase_decision(current_phase)
+        # Default: proceed to next phase with adaptive duration
+        next_phase = self._get_next_phase(current_phase)
+        duration = self._calculate_adaptive_duration(traffic_state, next_phase)
+        
+        return SignalDecision(
+            phase_id=next_phase,
+            duration=duration,
+            reason="Normal progression",
+            priority=1
+        )
     
     def _check_emergency_conditions(self, traffic_state: TrafficState) -> Optional[SignalDecision]:
         """Check for emergency conditions that require immediate action"""
@@ -123,40 +131,74 @@ class SignalController:
         
         return None
     
-    def _check_phase_extension(self, traffic_state: TrafficState, current_phase: int) -> Optional[SignalDecision]:
-        """Check if current phase should be extended"""
-        # Only extend green phases
-        if current_phase not in [0, 2, 4, 6]:  # Not a green phase
+    def _check_phase_extension_improved(self, traffic_state: TrafficState, current_phase: int) -> Optional[SignalDecision]:
+        """Improved phase extension logic to prevent infinite loops"""
+        # Don't extend if we've already been in this phase too long
+        if self.phase_duration > self.max_phase_duration:
             return None
         
-        # Check if there are vehicles waiting in current direction
-        if self._has_waiting_vehicles_in_current_direction(current_phase, traffic_state):
-            # Don't extend beyond maximum duration
-            if self.phase_duration < self.max_phase_duration:
-                return SignalDecision(
-                    phase_id=current_phase,
-                    duration=min(self.phase_duration + 10, self.max_phase_duration),
-                    reason="Vehicles waiting in current direction",
-                    priority=7
-                )
+        # Check if current phase is serving heavy traffic
+        if current_phase in [0, 4]:  # NS Green phases
+            # Check North-South traffic
+            ns_queues = self._get_ns_queue_length(traffic_state)
+            ns_waiting = self._get_ns_waiting_time(traffic_state)
+            
+            if ns_queues > self.queue_threshold and ns_waiting < self.waiting_time_threshold:
+                # Extend but with a reasonable limit
+                extension = min(15.0, self.max_phase_duration - self.phase_duration)
+                if extension > 5.0:
+                    return SignalDecision(
+                        phase_id=current_phase,
+                        duration=self.phase_duration + extension,
+                        reason=f"NS traffic heavy (queues: {ns_queues})",
+                        priority=3
+                    )
+        
+        elif current_phase in [2, 6]:  # EW Green phases
+            # Check East-West traffic
+            ew_queues = self._get_ew_queue_length(traffic_state)
+            ew_waiting = self._get_ew_waiting_time(traffic_state)
+            
+            if ew_queues > self.queue_threshold and ew_waiting < self.waiting_time_threshold:
+                # Extend but with a reasonable limit
+                extension = min(15.0, self.max_phase_duration - self.phase_duration)
+                if extension > 5.0:
+                    return SignalDecision(
+                        phase_id=current_phase,
+                        duration=self.phase_duration + extension,
+                        reason=f"EW traffic heavy (queues: {ew_queues})",
+                        priority=3
+                    )
         
         return None
     
-    def _check_phase_skip(self, traffic_state: TrafficState, current_phase: int) -> Optional[SignalDecision]:
-        """Check if current phase should be skipped"""
-        # Only skip green phases
-        if current_phase not in [0, 2, 4, 6]:  # Not a green phase
+    def _check_phase_skip_improved(self, traffic_state: TrafficState, current_phase: int) -> Optional[SignalDecision]:
+        """Improved phase skip logic to prevent infinite loops"""
+        # Don't skip if we haven't been in this phase long enough
+        if self.phase_duration < self.min_phase_duration:
             return None
         
-        # Check if no vehicles are waiting in current direction
-        if not self._has_waiting_vehicles_in_current_direction(current_phase, traffic_state):
-            # Check if other directions have waiting vehicles
-            if self._has_waiting_vehicles_in_other_directions(current_phase, traffic_state):
+        # Check if current phase is serving very light traffic
+        if current_phase in [0, 4]:  # NS Green phases
+            ns_queues = self._get_ns_queue_length(traffic_state)
+            if ns_queues <= 1:  # Very light traffic
+                next_phase = self._get_next_phase(current_phase)
                 return SignalDecision(
-                    phase_id=self._get_next_green_phase(current_phase),
-                    duration=self.phase_info[self._get_next_green_phase(current_phase)]["default_duration"],
-                    reason="No vehicles in current direction, others waiting",
-                    priority=6
+                    phase_id=next_phase,
+                    duration=30.0,
+                    reason="NS traffic light, skipping",
+                    priority=2
+                )
+        
+        elif current_phase in [2, 6]:  # EW Green phases
+            ew_queues = self._get_ew_queue_length(traffic_state)
+            if ew_queues <= 1:  # Very light traffic
+                next_phase = self._get_next_phase(current_phase)
+                return SignalDecision(
+                    phase_id=next_phase,
+                    duration=30.0,
+                    reason="EW traffic light, skipping",
+                    priority=2
                 )
         
         return None
@@ -281,6 +323,66 @@ class SignalController:
             "recent_decisions": self.decision_history[-10:] if self.decision_history else [],
             "phase_performance": self.phase_performance
         }
+
+    def _get_ns_queue_length(self, traffic_state: TrafficState) -> int:
+        """Get North-South queue length"""
+        if traffic_state.per_lane_queues:
+            ns_queues = 0
+            for lane_id, queue in traffic_state.per_lane_queues.items():
+                if any(direction in lane_id for direction in ['3i', '4i']):  # North-South lanes
+                    ns_queues += queue
+            return ns_queues
+        return 0
+    
+    def _get_ew_queue_length(self, traffic_state: TrafficState) -> int:
+        """Get East-West queue length"""
+        if traffic_state.per_lane_queues:
+            ew_queues = 0
+            for lane_id, queue in traffic_state.per_lane_queues.items():
+                if any(direction in lane_id for direction in ['1i', '2i']):  # East-West lanes
+                    ew_queues += queue
+            return ew_queues
+        return 0
+    
+    def _get_ns_waiting_time(self, traffic_state: TrafficState) -> float:
+        """Get North-South average waiting time"""
+        if traffic_state.per_lane_waiting_times:
+            ns_times = []
+            for lane_id, waiting_time in traffic_state.per_lane_waiting_times.items():
+                if any(direction in lane_id for direction in ['3i', '4i']):  # North-South lanes
+                    ns_times.append(waiting_time)
+            return sum(ns_times) / len(ns_times) if ns_times else 0.0
+        return 0.0
+    
+    def _get_ew_waiting_time(self, traffic_state: TrafficState) -> float:
+        """Get East-West average waiting time"""
+        if traffic_state.per_lane_waiting_times:
+            ew_times = []
+            for lane_id, waiting_time in traffic_state.per_lane_waiting_times.items():
+                if any(direction in lane_id for direction in ['1i', '2i']):  # East-West lanes
+                    ew_times.append(waiting_time)
+            return sum(ew_times) / len(ew_times) if ew_times else 0.0
+        return 0.0
+    
+    def _calculate_adaptive_duration(self, traffic_state: TrafficState, phase_id: int) -> float:
+        """Calculate adaptive phase duration based on traffic conditions"""
+        base_duration = 30.0
+        
+        # Adjust based on overall congestion
+        if traffic_state.queue_length > 20:
+            base_duration = 45.0
+        elif traffic_state.queue_length > 10:
+            base_duration = 35.0
+        elif traffic_state.queue_length < 5:
+            base_duration = 25.0
+        
+        # Adjust based on waiting time
+        if traffic_state.avg_waiting_time > 20.0:
+            base_duration += 10.0
+        elif traffic_state.avg_waiting_time < 5.0:
+            base_duration -= 5.0
+        
+        return max(self.min_phase_duration, min(self.max_phase_duration, base_duration))
 
 # Example usage
 if __name__ == "__main__":

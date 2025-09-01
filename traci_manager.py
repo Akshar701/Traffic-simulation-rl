@@ -29,6 +29,14 @@ class TrafficState:
     queue_length: int
     current_phase: int
     phase_duration: float
+    per_lane_queues: Dict[str, int] = None
+    per_lane_waiting_times: Dict[str, float] = None
+    per_lane_vehicle_counts: Dict[str, int] = None
+    directional_flow: Dict[str, float] = None
+    signal_phase_timing: Dict[str, float] = None
+    congestion_per_lane: Dict[str, str] = None
+    emergency_vehicles: List[str] = None
+    pedestrian_waiting: int = None
 
 class TraciManager:
     """Manages SUMO simulation connection and basic operations"""
@@ -99,53 +107,180 @@ class TraciManager:
             self.simulation_state = SimulationState.ERROR
             return False
     
-    def get_traffic_state(self) -> TrafficState:
-        """Get current traffic state"""
+    def get_traffic_state(self) -> Optional[TrafficState]:
+        """Get enhanced traffic state with per-lane metrics"""
         try:
-            # Get current simulation time
-            timestamp = traci.simulation.getTime()
+            if self.simulation_state != SimulationState.RUNNING:
+                return None
             
-            # Get vehicle statistics
-            total_vehicles = traci.vehicle.getIDCount()
-            waiting_vehicles = 0
-            total_waiting_time = 0
-            total_speed = 0
-            total_queue_length = 0
-            
-            # Calculate metrics across all edges
-            for edge_id in self.edge_ids:
-                waiting_vehicles += traci.edge.getLastStepHaltingNumber(edge_id)
-                total_waiting_time += traci.edge.getWaitingTime(edge_id)
-                total_queue_length += traci.edge.getLastStepHaltingNumber(edge_id)
-            
-            # Get vehicle speeds
-            vehicle_ids = traci.vehicle.getIDList()
-            for vehicle_id in vehicle_ids:
-                speed = traci.vehicle.getSpeed(vehicle_id)
-                total_speed += speed
+            # Basic metrics
+            vehicle_count = len(traci.vehicle.getIDList())
+            waiting_vehicles = len([v for v in traci.vehicle.getIDList() 
+                                  if traci.vehicle.getWaitingTime(v) > 0])
             
             # Calculate averages
-            avg_waiting_time = total_waiting_time / max(len(self.edge_ids), 1)
-            avg_speed = total_speed / max(len(vehicle_ids), 1)
+            if vehicle_count > 0:
+                waiting_times = [traci.vehicle.getWaitingTime(v) for v in traci.vehicle.getIDList()]
+                avg_waiting_time = sum(waiting_times) / vehicle_count
+                speeds = [traci.vehicle.getSpeed(v) for v in traci.vehicle.getIDList()]
+                avg_speed = sum(speeds) / vehicle_count
+            else:
+                avg_waiting_time = 0.0
+                avg_speed = 0.0
             
-            # Get current traffic light state
-            current_phase = traci.trafficlight.getPhase(self.traffic_light_id)
-            phase_duration = traci.trafficlight.getPhaseDuration(self.traffic_light_id)
+            # Get signal information
+            signal_info = self.get_signal_info()
+            current_phase = signal_info.get("current_phase", 0)
+            phase_duration = signal_info.get("phase_duration", 30.0)
+            
+            # Enhanced per-lane metrics
+            per_lane_queues = self._get_per_lane_queues()
+            per_lane_waiting_times = self._get_per_lane_waiting_times()
+            per_lane_vehicle_counts = self._get_per_lane_vehicle_counts()
+            directional_flow = self._get_directional_flow()
+            signal_phase_timing = self._get_signal_phase_timing()
+            congestion_per_lane = self._get_congestion_per_lane()
+            emergency_vehicles = self._get_emergency_vehicles()
+            pedestrian_waiting = self._get_pedestrian_waiting()
+            
+            # Calculate total queue length
+            queue_length = sum(per_lane_queues.values())
             
             return TrafficState(
-                timestamp=timestamp,
-                vehicle_count=total_vehicles,
+                timestamp=time.time(),
+                vehicle_count=vehicle_count,
                 waiting_vehicles=waiting_vehicles,
                 avg_waiting_time=avg_waiting_time,
                 avg_speed=avg_speed,
-                queue_length=total_queue_length,
+                queue_length=queue_length,
                 current_phase=current_phase,
-                phase_duration=phase_duration
+                phase_duration=phase_duration,
+                per_lane_queues=per_lane_queues,
+                per_lane_waiting_times=per_lane_waiting_times,
+                per_lane_vehicle_counts=per_lane_vehicle_counts,
+                directional_flow=directional_flow,
+                signal_phase_timing=signal_phase_timing,
+                congestion_per_lane=congestion_per_lane,
+                emergency_vehicles=emergency_vehicles,
+                pedestrian_waiting=pedestrian_waiting
             )
             
         except Exception as e:
             print(f"Error getting traffic state: {e}")
             return None
+    
+    def _get_per_lane_queues(self) -> Dict[str, int]:
+        """Get queue length for each lane"""
+        queues = {}
+        try:
+            for edge_id in self.edge_ids:
+                for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
+                    lane_id = f"{edge_id}_{lane_idx}"
+                    queue_length = traci.lane.getLastStepHaltingNumber(lane_id)
+                    queues[lane_id] = queue_length
+        except Exception as e:
+            print(f"Error getting per-lane queues: {e}")
+        return queues
+    
+    def _get_per_lane_waiting_times(self) -> Dict[str, float]:
+        """Get average waiting time for each lane"""
+        waiting_times = {}
+        try:
+            for edge_id in self.edge_ids:
+                for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
+                    lane_id = f"{edge_id}_{lane_idx}"
+                    vehicles = traci.lane.getLastStepVehicleIDs(lane_id)
+                    if vehicles:
+                        lane_waiting_times = [traci.vehicle.getWaitingTime(v) for v in vehicles]
+                        waiting_times[lane_id] = sum(lane_waiting_times) / len(lane_waiting_times)
+                    else:
+                        waiting_times[lane_id] = 0.0
+        except Exception as e:
+            print(f"Error getting per-lane waiting times: {e}")
+        return waiting_times
+    
+    def _get_per_lane_vehicle_counts(self) -> Dict[str, int]:
+        """Get vehicle count for each lane"""
+        vehicle_counts = {}
+        try:
+            for edge_id in self.edge_ids:
+                for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
+                    lane_id = f"{edge_id}_{lane_idx}"
+                    vehicle_count = len(traci.lane.getLastStepVehicleIDs(lane_id))
+                    vehicle_counts[lane_id] = vehicle_count
+        except Exception as e:
+            print(f"Error getting per-lane vehicle counts: {e}")
+        return vehicle_counts
+    
+    def _get_directional_flow(self) -> Dict[str, float]:
+        """Get traffic flow by direction"""
+        flow = {"NS": 0.0, "EW": 0.0, "NE": 0.0, "NW": 0.0, "SE": 0.0, "SW": 0.0}
+        try:
+            # This is a simplified implementation - you might need to enhance based on your network
+            for vehicle_id in traci.vehicle.getIDList():
+                route = traci.vehicle.getRoute(vehicle_id)
+                if len(route) >= 2:
+                    # Determine direction based on route
+                    # This is a placeholder - implement based on your specific network
+                    flow["NS"] += 1.0  # Simplified
+        except Exception as e:
+            print(f"Error getting directional flow: {e}")
+        return flow
+    
+    def _get_signal_phase_timing(self) -> Dict[str, float]:
+        """Get signal phase timing information"""
+        timing = {}
+        try:
+            signal_info = self.get_signal_info()
+            timing["current_phase"] = float(signal_info.get("current_phase", 0))
+            timing["phase_duration"] = signal_info.get("phase_duration", 30.0)
+            timing["time_in_phase"] = signal_info.get("time_in_phase", 0.0)
+            timing["time_to_next_phase"] = timing["phase_duration"] - timing["time_in_phase"]
+        except Exception as e:
+            print(f"Error getting signal phase timing: {e}")
+        return timing
+    
+    def _get_congestion_per_lane(self) -> Dict[str, str]:
+        """Get congestion level for each lane"""
+        congestion = {}
+        try:
+            for edge_id in self.edge_ids:
+                for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
+                    lane_id = f"{edge_id}_{lane_idx}"
+                    queue_length = traci.lane.getLastStepHaltingNumber(lane_id)
+                    
+                    if queue_length == 0:
+                        congestion[lane_id] = "low"
+                    elif queue_length <= 3:
+                        congestion[lane_id] = "moderate"
+                    elif queue_length <= 8:
+                        congestion[lane_id] = "high"
+                    else:
+                        congestion[lane_id] = "severe"
+        except Exception as e:
+            print(f"Error getting congestion per lane: {e}")
+        return congestion
+    
+    def _get_emergency_vehicles(self) -> List[str]:
+        """Get list of emergency vehicles"""
+        emergency_vehicles = []
+        try:
+            for vehicle_id in traci.vehicle.getIDList():
+                vehicle_type = traci.vehicle.getTypeID(vehicle_id)
+                if "emergency" in vehicle_type.lower() or "ambulance" in vehicle_type.lower():
+                    emergency_vehicles.append(vehicle_id)
+        except Exception as e:
+            print(f"Error getting emergency vehicles: {e}")
+        return emergency_vehicles
+    
+    def _get_pedestrian_waiting(self) -> int:
+        """Get number of waiting pedestrians"""
+        try:
+            # This is a placeholder - implement based on your network
+            return 0
+        except Exception as e:
+            print(f"Error getting pedestrian waiting: {e}")
+            return 0
     
     def change_signal_phase(self, phase_id: int, duration: float = None) -> bool:
         """Change traffic signal phase"""
