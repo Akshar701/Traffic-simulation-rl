@@ -1,0 +1,57 @@
+[
+  {
+    "episode": 1,
+    "total_reward": -33729.959788616194,
+    "steps": 1000,
+    "epsilon": 0.00998645168764533,
+    "mean_step_reward": -33.729959788616185,
+    "timestamp": "2025-09-02T17:40:48.843002",
+    "current_lr": 0.0001,
+    "performance_level": "unknown",
+    "improvement_rate": 0
+  },
+  {
+    "episode": 2,
+    "total_reward": -35480.73256367191,
+    "steps": 1000,
+    "epsilon": 0.00998645168764533,
+    "mean_step_reward": -35.48073256367186,
+    "timestamp": "2025-09-02T17:41:46.803328",
+    "current_lr": 0.0001,
+    "performance_level": "unknown",
+    "improvement_rate": 0
+  },
+  {
+    "episode": 3,
+    "total_reward": -26273.018112271195,
+    "steps": 1000,
+    "epsilon": 0.00998645168764533,
+    "mean_step_reward": -26.27301811227118,
+    "timestamp": "2025-09-02T17:42:45.727536",
+    "current_lr": 0.0001,
+    "performance_level": "unknown",
+    "improvement_rate": 0
+  },
+  {
+    "episode": 4,
+    "total_reward": -30911.44408829441,
+    "steps": 1000,
+    "epsilon": 0.00998645168764533,
+    "mean_step_reward": -30.911444088294402,
+    "timestamp": "2025-09-02T17:43:44.719423",
+    "current_lr": 0.0001,
+    "performance_level": "unknown",
+    "improvement_rate": 0
+  },
+  {
+    "episode": 5,
+    "total_reward": -35079.38567738272,
+    "steps": 1000,
+    "epsilon": 0.00998645168764533,
+    "mean_step_reward": -35.07938567738269,
+    "timestamp": "2025-09-02T17:44:43.973836",
+    "current_lr": 0.0001,
+    "performance_level": "unknown",
+    "improvement_rate": 0
+  }
+]

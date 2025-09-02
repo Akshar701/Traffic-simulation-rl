@@ -12,6 +12,7 @@ import numpy as np
 import traci
 import time
 import os
+import subprocess
 from gym import spaces
 from typing import Dict, List, Any, Optional, Tuple
 import sys
@@ -21,6 +22,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.state_utils import get_24d_state_vector, get_state_summary
 from utils.reward_utils import calculate_reward, reset_reward_calculator
+
+class SUMOError(Exception):
+    """Custom exception for SUMO-related errors"""
+    pass
 
 class TrafficEnv(gym.Env):
     """
@@ -84,6 +89,9 @@ class TrafficEnv(gym.Env):
         self.episode_reward = 0.0
         self.episode_metrics = []
         
+        # Validate SUMO installation and config before proceeding
+        self._validate_setup()
+        
     def reset(self) -> np.ndarray:
         """
         Reset the environment for a new episode
@@ -110,6 +118,127 @@ class TrafficEnv(gym.Env):
         initial_state = self._get_state()
         
         return initial_state
+    
+    def _validate_setup(self):
+        """Validate SUMO installation and configuration files"""
+        try:
+            # Check SUMO installation
+            self._check_sumo_installation()
+            
+            # Validate config file
+            self._validate_config_file()
+            
+            # Check network and route files
+            self._validate_simulation_files()
+            
+            print("✅ SUMO setup validation completed successfully")
+            
+        except Exception as e:
+            print(f"❌ SUMO setup validation failed: {e}")
+            raise
+    
+    def _check_sumo_installation(self):
+        """Check if SUMO is properly installed and accessible"""
+        try:
+            # Check SUMO version
+            import subprocess
+            result = subprocess.run(
+                ['sumo', '--version'], 
+                capture_output=True, 
+                text=True, 
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                raise SUMOError(f"SUMO command failed with return code {result.returncode}")
+            
+            # Extract version information
+            version_line = result.stdout.split('\n')[0]
+            print(f"✅ SUMO found: {version_line}")
+            
+            # Check if traci module is available
+            try:
+                import traci
+                print("✅ traci module imported successfully")
+            except ImportError as e:
+                raise SUMOError(f"traci module not available: {e}")
+                
+        except FileNotFoundError:
+            raise SUMOError(
+                "SUMO not found in PATH. Please install SUMO and ensure it's in your system PATH.\n"
+                "Installation instructions: https://sumo.dlr.de/docs/Installing/index.html"
+            )
+        except subprocess.TimeoutExpired:
+            raise SUMOError("SUMO version check timed out. SUMO may be corrupted or not responding.")
+        except Exception as e:
+            raise SUMOError(f"Unexpected error checking SUMO installation: {e}")
+    
+    def _validate_config_file(self):
+        """Validate the SUMO configuration file"""
+        if not os.path.exists(self.config_file):
+            raise SUMOError(
+                f"SUMO config file not found: {self.config_file}\n"
+                f"Current working directory: {os.getcwd()}\n"
+                f"Available files in Sumo_env/Single intersection lhd/: {os.listdir('Sumo_env/Single intersection lhd/') if os.path.exists('Sumo_env/Single intersection lhd/') else 'Directory not found'}"
+            )
+        
+        # Check if config file is readable
+        try:
+            with open(self.config_file, 'r') as f:
+                config_content = f.read()
+                if not config_content.strip():
+                    raise SUMOError(f"Config file is empty: {self.config_file}")
+        except Exception as e:
+            raise SUMOError(f"Cannot read config file {self.config_file}: {e}")
+        
+        print(f"✅ Config file validated: {self.config_file}")
+    
+    def _validate_simulation_files(self):
+        """Validate that required simulation files exist"""
+        try:
+            # Parse config file to find network and route files
+            import xml.etree.ElementTree as ET
+            
+            tree = ET.parse(self.config_file)
+            root = tree.getroot()
+            
+            # Find input files
+            input_files = []
+            for input_elem in root.findall('.//input'):
+                for child in input_elem:
+                    if child.tag in ['net-file', 'route-files', 'additional-files']:
+                        file_path = child.get('value')
+                        if file_path:
+                            # Handle comma-separated file lists
+                            if ',' in file_path:
+                                # Split by comma and handle each file
+                                individual_files = [f.strip() for f in file_path.split(',')]
+                                for individual_file in individual_files:
+                                    if individual_file:  # Skip empty strings
+                                        # Resolve relative paths
+                                        config_dir = os.path.dirname(os.path.abspath(self.config_file))
+                                        full_path = os.path.join(config_dir, individual_file)
+                                        input_files.append((child.tag, full_path))
+                            else:
+                                # Single file
+                                # Resolve relative paths
+                                config_dir = os.path.dirname(os.path.abspath(self.config_file))
+                                full_path = os.path.join(config_dir, file_path)
+                                input_files.append((child.tag, full_path))
+            
+            # Validate each input file
+            for file_type, file_path in input_files:
+                if not os.path.exists(file_path):
+                    raise SUMOError(f"Required {file_type} not found: {file_path}")
+                print(f"✅ {file_type} validated: {os.path.basename(file_path)}")
+            
+            if not input_files:
+                print("⚠️ No input files found in config - this may cause issues")
+                
+        except ET.ParseError as e:
+            raise SUMOError(f"Invalid XML in config file: {e}")
+        except Exception as e:
+            raise SUMOError(f"Error validating simulation files: {e}")
     
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict]:
         """
