@@ -1,0 +1,1 @@
+step,timestamp,waiting_time_change,queue_penalty,throughput_reward,efficiency_reward,total_reward,current_waiting_time,current_queue_length,avg_speed,vehicle_count

@@ -48,7 +48,7 @@ class DQNTrainer:
         
         # Use AdaptiveDQNAgent instead of base DQNAgent
         self.agent = AdaptiveDQNAgent(
-            state_size=config.get('state_size', 24),
+            state_size=config.get('state_size', 8),
             action_size=config.get('action_size', 4),
             hidden_size=config.get('hidden_size', 256),
             learning_rate=config.get('learning_rate', 1e-4),
@@ -710,7 +710,7 @@ def main():
     config = {
         'config_file': f'Sumo_env/Single intersection lhd/{args.config}',
         'max_steps': 1000,
-        'state_size': 24,
+        'state_size': 8,
         'action_size': 4,
         'hidden_size': 256,
         'learning_rate': 1e-4,

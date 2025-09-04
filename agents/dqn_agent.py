@@ -25,13 +25,13 @@ class DQNNetwork(nn.Module):
     """
     Neural Network Architecture for DQN - GPU Optimized
     
-    Input Layer: 24 neurons (state vector size)
+    Input Layer: 8 neurons (state vector size)
     Hidden Layer 1: 256 neurons with ReLU
     Hidden Layer 2: 256 neurons with ReLU  
     Output Layer: 4 neurons (action space size)
     """
     
-    def __init__(self, input_size: int = 24, hidden_size: int = 256, output_size: int = 4):
+    def __init__(self, input_size: int = 8, hidden_size: int = 256, output_size: int = 4):
         super(DQNNetwork, self).__init__()
         
         self.fc1 = nn.Linear(input_size, hidden_size)
@@ -93,14 +93,14 @@ class DQNAgent:
     - Experience Replay for stable learning
     - Target Network for stable Q-value estimation
     - Epsilon-greedy exploration strategy
-    - State: 24D vector (queue length + waiting time per lane)
+    - State: 8D vector (4 queue lengths + 4 one-hot phase encoding)
     - Actions: 4 discrete actions (NS Green, EW Green, Extend, Skip)
     - Reward: Change in cumulative waiting time
     - GPU acceleration with CUDA optimization
     """
     
     def __init__(self, 
-                 state_size: int = 24,
+                 state_size: int = 8,
                  action_size: int = 4,
                  hidden_size: int = 256,
                  learning_rate: float = 1e-4,
@@ -117,7 +117,7 @@ class DQNAgent:
         Initialize DQN Agent with GPU optimization
         
         Args:
-            state_size: Size of state vector (24 for 12 lanes * 2 metrics)
+            state_size: Size of state vector (8 for 4 approaches + 4 phases)
             action_size: Number of possible actions (4)
             hidden_size: Number of neurons in hidden layers (256)
             learning_rate: Learning rate for optimizer
@@ -599,7 +599,7 @@ class AdaptiveDQNAgent(DQNAgent):
     """
     
     def __init__(self, 
-                 state_size: int = 24,
+                 state_size: int = 8,
                  action_size: int = 4,
                  hidden_size: int = 256,
                  learning_rate: float = 1e-4,

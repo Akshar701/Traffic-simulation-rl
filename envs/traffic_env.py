@@ -20,7 +20,7 @@ import sys
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.state_utils import get_24d_state_vector, get_state_summary
+from utils.state_utils import get_8d_state_vector, get_state_summary
 from utils.reward_utils import calculate_reward, reset_reward_calculator
 
 class SUMOError(Exception):
@@ -67,13 +67,13 @@ class TrafficEnv(gym.Env):
         # 3: Skip to next phase
         self.action_space = spaces.Discrete(4)
         
-        # Observation space: 24-dimensional state vector
-        # [queue_length_1, waiting_time_1, queue_length_2, waiting_time_2, ...]
-        # for all 12 lanes (24 values total)
+        # Observation space: 8-dimensional state vector
+        # [north_queue, east_queue, south_queue, west_queue, phase_0, phase_1, phase_2, phase_3]
+        # for 4 approaches + 4 phases (8 values total)
         self.observation_space = spaces.Box(
             low=0.0, 
             high=np.inf, 
-            shape=(24,), 
+            shape=(8,), 
             dtype=np.float32
         )
         
@@ -372,8 +372,8 @@ class TrafficEnv(gym.Env):
     def _get_state(self) -> np.ndarray:
         """Get current state observation"""
         try:
-            # Get 24-dimensional state vector from state utils
-            state_vector = get_24d_state_vector()
+            # Get 8-dimensional state vector from state utils
+            state_vector = get_8d_state_vector()
             return state_vector
         except Exception as e:
             print(f"Error getting state: {e}")
