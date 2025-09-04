@@ -2,7 +2,7 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
     <input>
         <net-file value="cross_2lanes.net.xml"/>
-        <route-files value="asymmetric_episode_routes.rou.xml"/>
+        <route-files value="congested_episode_routes.rou.xml"/>
         <additional-files value="essential_detectors.xml,essential_traffic_lights.xml"/>
     </input>
     <time>

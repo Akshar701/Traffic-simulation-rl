@@ -93,8 +93,8 @@ class DQNAgent:
     - Experience Replay for stable learning
     - Target Network for stable Q-value estimation
     - Epsilon-greedy exploration strategy
-    - State: 8D vector (4 queue lengths + 4 one-hot phase encoding)
-    - Actions: 4 discrete actions (NS Green, EW Green, Extend, Skip)
+            - State: 12D vector (8 queue lengths + 4 one-hot phase encoding)
+            - Actions: 4 discrete actions (NS Straight+Left, EW Straight+Left, NS Right, EW Right)
     - Reward: Change in cumulative waiting time
     - GPU acceleration with CUDA optimization
     """
@@ -117,7 +117,7 @@ class DQNAgent:
         Initialize DQN Agent with GPU optimization
         
         Args:
-            state_size: Size of state vector (8 for 4 approaches + 4 phases)
+            state_size: Size of state vector (12 for 8 queue measurements + 4 phases)
             action_size: Number of possible actions (4)
             hidden_size: Number of neurons in hidden layers (256)
             learning_rate: Learning rate for optimizer
@@ -184,12 +184,12 @@ class DQNAgent:
         self.episode_rewards = []
         self.recent_actions = []  # Track recent actions for analysis
         
-        # Action mapping
+        # Action mapping for 4-phase traffic light system
         self.action_names = {
-            0: "NS Green",
-            1: "EW Green", 
-            2: "Extend Phase",
-            3: "Skip Phase"
+            0: "NS Straight+Left",    # Phase 0: North-South Straight & Left
+            1: "EW Straight+Left",    # Phase 1: East-West Straight & Left
+            2: "NS Protected Right",  # Phase 2: North-South Protected Right
+            3: "EW Protected Right"   # Phase 3: East-West Protected Right
         }
         
         # Memory management

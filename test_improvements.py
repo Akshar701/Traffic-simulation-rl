@@ -64,7 +64,7 @@ def test_gpu_optimization():
         # Create agent with GPU optimization
         print("🤖 Creating DQN agent with GPU optimization...")
         agent = DQNAgent(
-            state_size=8,
+            state_size=12,
             action_size=4,
             device='auto',
             mixed_precision=True
@@ -119,7 +119,7 @@ def test_adaptive_hyperparameters():
         # Create adaptive agent
         print("🤖 Creating Adaptive DQN agent...")
         agent = AdaptiveDQNAgent(
-            state_size=8,
+            state_size=12,
             action_size=4,
             adaptive_lr=True,
             adaptive_epsilon=True,
@@ -203,7 +203,7 @@ def test_training_integration():
         config = {
             'config_file': 'Sumo_env/Single intersection lhd/uniform_simulation.sumocfg',
             'max_steps': 1000,
-            'state_size': 8,
+            'state_size': 12,
             'action_size': 4,
             'adaptive_lr': True,
             'adaptive_epsilon': True,

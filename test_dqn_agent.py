@@ -30,7 +30,7 @@ def test_dqn_agent():
         # Create agent
         print("🤖 Creating DQN agent...")
         agent = DQNAgent(
-            state_size=8,
+            state_size=12,
             action_size=4,
             hidden_size=256,
             learning_rate=1e-4,
@@ -43,7 +43,7 @@ def test_dqn_agent():
         print("🔄 Testing environment reset...")
         state = env.reset()
         print(f"✅ Environment reset successful, state shape: {state.shape}")
-        print(f"   Expected: (8,), Got: {state.shape}")
+        print(f"   Expected: (12,), Got: {state.shape}")
         
         # Test agent action selection
         print("🎯 Testing agent action selection...")

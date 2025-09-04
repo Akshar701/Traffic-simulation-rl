@@ -9,7 +9,7 @@ Utility modules for traffic signal control and RL training.
 from .state_utils import (
     StateExtractor,
     ApproachState,
-    get_8d_state_vector,
+    get_12d_state_vector,
     get_state_summary,
     get_detailed_state_dict,
     state_extractor
@@ -29,7 +29,7 @@ __all__ = [
     # State utilities
     'StateExtractor',
     'LaneState', 
-    'get_8d_state_vector',
+    'get_12d_state_vector',
     'get_state_summary',
     'get_detailed_state_dict',
     'state_extractor',
