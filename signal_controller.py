@@ -50,12 +50,24 @@ class SignalController:
         self.waiting_time_threshold = 30.0
         self.emergency_vehicle_detected = False
         
-        # Phase information - simplified 4-phase system
+        # Phase information matching tls.tll.xml (8 phases total)
         self.phase_info = {
-            0: {"name": "NS_Left_Straight", "description": "North-South left-turn + straight lanes green", "default_duration": 30},
-            1: {"name": "NS_Yellow", "description": "North-South yellow transition", "default_duration": 3},
-            2: {"name": "EW_Left_Straight", "description": "East-West left-turn + straight lanes green", "default_duration": 30},
-            3: {"name": "EW_Yellow", "description": "East-West yellow transition", "default_duration": 3}
+            0: {"name": "NS_Straight_Left", "description": "North-South straight + left lanes green", "default_duration": 30},
+            1: {"name": "NS_Yellow", "description": "North-South yellow transition", "default_duration": 4},
+            2: {"name": "EW_Straight_Left", "description": "East-West straight + left lanes green", "default_duration": 30},
+            3: {"name": "EW_Yellow", "description": "East-West yellow transition", "default_duration": 4},
+            4: {"name": "NS_Protected_Right", "description": "North-South protected right turn", "default_duration": 15},
+            5: {"name": "NS_Right_Yellow", "description": "North-South right turn yellow", "default_duration": 4},
+            6: {"name": "EW_Protected_Right", "description": "East-West protected right turn", "default_duration": 15},
+            7: {"name": "EW_Right_Yellow", "description": "East-West right turn yellow", "default_duration": 4}
+        }
+        
+        # Action mapping: actions 0,1,2,3 correspond to phases 0,2,4,6 (skipping yellow phases)
+        self.action_to_phase = {
+            0: 0,  # Action 0 -> Phase 0 (NS_Straight_Left)
+            1: 2,  # Action 1 -> Phase 2 (EW_Straight_Left)
+            2: 4,  # Action 2 -> Phase 4 (NS_Protected_Right)
+            3: 6   # Action 3 -> Phase 6 (EW_Protected_Right)
         }
         
         # Performance tracking
@@ -141,7 +153,7 @@ class SignalController:
             return None
         
         # Check if current phase is serving heavy traffic
-        if current_phase == 0:  # NS_Left_Straight phase
+        if current_phase == 0:  # NS_Straight_Left phase
             # Check North-South traffic
             ns_queues = self._get_ns_queue_length(traffic_state)
             ns_waiting = self._get_ns_waiting_time(traffic_state)
@@ -157,7 +169,7 @@ class SignalController:
                         priority=3
                     )
         
-        elif current_phase == 2:  # EW_Left_Straight phase
+        elif current_phase == 2:  # EW_Straight_Left phase
             # Check East-West traffic
             ew_queues = self._get_ew_queue_length(traffic_state)
             ew_waiting = self._get_ew_waiting_time(traffic_state)
@@ -173,6 +185,32 @@ class SignalController:
                         priority=3
                     )
         
+        elif current_phase == 4:  # NS_Protected_Right phase
+            # Check North-South right turn traffic
+            ns_queues = self._get_ns_queue_length(traffic_state)
+            if ns_queues > self.queue_threshold:
+                extension = min(10.0, self.max_phase_duration - self.phase_duration)
+                if extension > 3.0:
+                    return SignalDecision(
+                        phase_id=current_phase,
+                        duration=self.phase_duration + extension,
+                        reason=f"NS right turn traffic heavy (queues: {ns_queues})",
+                        priority=3
+                    )
+        
+        elif current_phase == 6:  # EW_Protected_Right phase
+            # Check East-West right turn traffic
+            ew_queues = self._get_ew_queue_length(traffic_state)
+            if ew_queues > self.queue_threshold:
+                extension = min(10.0, self.max_phase_duration - self.phase_duration)
+                if extension > 3.0:
+                    return SignalDecision(
+                        phase_id=current_phase,
+                        duration=self.phase_duration + extension,
+                        reason=f"EW right turn traffic heavy (queues: {ew_queues})",
+                        priority=3
+                    )
+        
         return None
     
     def _check_phase_skip_improved(self, traffic_state: TrafficState, current_phase: int) -> Optional[SignalDecision]:
@@ -182,7 +220,7 @@ class SignalController:
             return None
         
         # Check if current phase is serving very light traffic
-        if current_phase == 0:  # NS_Left_Straight phase
+        if current_phase == 0:  # NS_Straight_Left phase
             ns_queues = self._get_ns_queue_length(traffic_state)
             if ns_queues <= 1:  # Very light traffic
                 next_phase = self._get_next_phase(current_phase)
@@ -193,7 +231,7 @@ class SignalController:
                     priority=2
                 )
         
-        elif current_phase == 2:  # EW_Left_Straight phase
+        elif current_phase == 2:  # EW_Straight_Left phase
             ew_queues = self._get_ew_queue_length(traffic_state)
             if ew_queues <= 1:  # Very light traffic
                 next_phase = self._get_next_phase(current_phase)
@@ -201,6 +239,28 @@ class SignalController:
                     phase_id=next_phase,
                     duration=30.0,
                     reason="EW traffic light, skipping",
+                    priority=2
+                )
+        
+        elif current_phase == 4:  # NS_Protected_Right phase
+            ns_queues = self._get_ns_queue_length(traffic_state)
+            if ns_queues <= 1:  # Very light traffic
+                next_phase = self._get_next_phase(current_phase)
+                return SignalDecision(
+                    phase_id=next_phase,
+                    duration=15.0,
+                    reason="NS right turn traffic light, skipping",
+                    priority=2
+                )
+        
+        elif current_phase == 6:  # EW_Protected_Right phase
+            ew_queues = self._get_ew_queue_length(traffic_state)
+            if ew_queues <= 1:  # Very light traffic
+                next_phase = self._get_next_phase(current_phase)
+                return SignalDecision(
+                    phase_id=next_phase,
+                    duration=15.0,
+                    reason="EW right turn traffic light, skipping",
                     priority=2
                 )
         
@@ -231,12 +291,26 @@ class SignalController:
     
     def _get_optimal_phase_for_congestion(self, traffic_state: TrafficState) -> int:
         """Get optimal phase for reducing congestion"""
-        # Simple heuristic: alternate between NS and EW
-        current_phase = self.get_current_signal_info()["current_phase"]
-        if current_phase in [0, 1]:  # Currently NS (NS_Left_Straight or NS_Yellow)
-            return 2  # Switch to EW_Left_Straight
+        # Get traffic metrics
+        ns_queues = self._get_ns_queue_length(traffic_state)
+        ew_queues = self._get_ew_queue_length(traffic_state)
+        
+        # Simple heuristic: choose phase with highest congestion
+        if ns_queues > ew_queues + 2:  # NS has significantly more traffic
+            return 0  # NS_Straight_Left
+        elif ew_queues > ns_queues + 2:  # EW has significantly more traffic
+            return 2  # EW_Straight_Left
+        elif ns_queues > 5:  # High NS traffic, consider right turn phase
+            return 4  # NS_Protected_Right
+        elif ew_queues > 5:  # High EW traffic, consider right turn phase
+            return 6  # EW_Protected_Right
         else:
-            return 0  # Switch to NS_Left_Straight
+            # Default: alternate between main phases
+            current_phase = self.get_current_signal_info()["current_phase"]
+            if current_phase in [0, 1]:  # Currently NS
+                return 2  # Switch to EW_Straight_Left
+            else:
+                return 0  # Switch to NS_Straight_Left
     
     def _get_optimal_phase_for_waiting(self, traffic_state: TrafficState) -> int:
         """Get optimal phase for reducing waiting times"""
@@ -244,20 +318,29 @@ class SignalController:
         return self._get_optimal_phase_for_congestion(traffic_state)
     
     def _get_next_phase(self, current_phase: int) -> int:
-        """Get next phase in the sequence - simplified 4-phase system"""
-        phase_sequence = [0, 1, 2, 3, 0]  # Circular sequence: NS_Left_Straight -> NS_Yellow -> EW_Left_Straight -> EW_Yellow -> repeat
+        """Get next phase in the sequence - 8-phase system"""
+        phase_sequence = [0, 1, 2, 3, 4, 5, 6, 7, 0]  # Circular sequence through all 8 phases
         current_index = phase_sequence.index(current_phase)
         return phase_sequence[current_index + 1]
     
     def _get_next_green_phase(self, current_phase: int) -> int:
-        """Get next green phase - simplified 4-phase system"""
-        green_phases = [0, 2]  # Only NS_Left_Straight and EW_Left_Straight are green phases
+        """Get next green phase - 8-phase system (phases 0, 2, 4, 6 are green)"""
+        green_phases = [0, 2, 4, 6]  # NS_Straight_Left, EW_Straight_Left, NS_Protected_Right, EW_Protected_Right
         if current_phase in green_phases:
             current_index = green_phases.index(current_phase)
             return green_phases[(current_index + 1) % len(green_phases)]
         else:
             # If currently in yellow, go to the next green phase
-            return 2 if current_phase in [1] else 0
+            if current_phase in [1]:  # NS_Yellow
+                return 2  # EW_Straight_Left
+            elif current_phase in [3]:  # EW_Yellow
+                return 4  # NS_Protected_Right
+            elif current_phase in [5]:  # NS_Right_Yellow
+                return 6  # EW_Protected_Right
+            elif current_phase in [7]:  # EW_Right_Yellow
+                return 0  # NS_Straight_Left
+            else:
+                return 0  # Default
     
     def execute_decision(self, decision: SignalDecision) -> bool:
         """Execute a signal control decision"""

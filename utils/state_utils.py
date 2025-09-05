@@ -170,13 +170,15 @@ class StateExtractor:
     
     def get_12d_state_vector(self) -> np.ndarray:
         """
-        Extract 12-dimensional state vector: 8 queue lengths + 4 one-hot phase encoding
+        Extract 12-dimensional state vector: 8 queue lengths + 4 one-hot action encoding
         
         Returns:
             np.ndarray: 12-dimensional vector with format:
             [N_straight_left_q, N_right_q, S_straight_left_q, S_right_q,
              E_straight_left_q, E_right_q, W_straight_left_q, W_right_q,
-             current_phase_one_hot_0, current_phase_one_hot_1, current_phase_one_hot_2, current_phase_one_hot_3]
+             current_action_one_hot_0, current_action_one_hot_1, current_action_one_hot_2, current_action_one_hot_3]
+            
+            Where actions map to phases: 0->0, 1->2, 2->4, 3->6
         """
         try:
             # Get queue lengths for each approach and movement type
@@ -189,17 +191,22 @@ class StateExtractor:
             W_straight_left_q = self.get_approach_queue_length('west', 'straight_left')
             W_right_q = self.get_approach_queue_length('west', 'right')
             
-            # Get current phase and create one-hot encoding
+            # Get current phase and map to action, then create one-hot encoding
             current_phase = self.get_current_phase()
-            phase_encoding = [0, 0, 0, 0]  # 4 phases (0-3)
-            if 0 <= current_phase < 4:
-                phase_encoding[current_phase] = 1
             
-            # Combine into 12D state vector (8 queue lengths + 4 phase encoding)
+            # Map phase to action: phases 0,2,4,6 -> actions 0,1,2,3
+            phase_to_action = {0: 0, 2: 1, 4: 2, 6: 3}
+            current_action = phase_to_action.get(current_phase, 0)  # Default to action 0
+            
+            action_encoding = [0, 0, 0, 0]  # 4 actions (0-3)
+            if 0 <= current_action < 4:
+                action_encoding[current_action] = 1
+            
+            # Combine into 12D state vector (8 queue lengths + 4 action encoding)
             state_vector = [
                 N_straight_left_q, N_right_q, S_straight_left_q, S_right_q,
                 E_straight_left_q, E_right_q, W_straight_left_q, W_right_q,
-                phase_encoding[0], phase_encoding[1], phase_encoding[2], phase_encoding[3]
+                action_encoding[0], action_encoding[1], action_encoding[2], action_encoding[3]
             ]
             
             return np.array(state_vector, dtype=np.float32)

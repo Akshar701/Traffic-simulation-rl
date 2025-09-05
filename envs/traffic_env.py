@@ -83,12 +83,24 @@ class TrafficEnv(gym.Env):
             dtype=np.float32
         )
         
-        # Phase definitions matching our SUMO configuration
+        # Phase definitions matching tls.tll.xml (8 phases total)
         self.phases = {
-            0: {"name": "NS_Left_Straight", "duration": 30, "description": "North-South left-turn + straight lanes green"},
-            1: {"name": "NS_Yellow", "duration": 3, "description": "North-South yellow transition"},
-            2: {"name": "EW_Left_Straight", "duration": 30, "description": "East-West left-turn + straight lanes green"},
-            3: {"name": "EW_Yellow", "duration": 3, "description": "East-West yellow transition"}
+            0: {"name": "NS_Straight_Left", "duration": 30, "description": "North-South straight + left lanes green"},
+            1: {"name": "NS_Yellow", "duration": 4, "description": "North-South yellow transition"},
+            2: {"name": "EW_Straight_Left", "duration": 30, "description": "East-West straight + left lanes green"},
+            3: {"name": "EW_Yellow", "duration": 4, "description": "East-West yellow transition"},
+            4: {"name": "NS_Protected_Right", "duration": 15, "description": "North-South protected right turn"},
+            5: {"name": "NS_Right_Yellow", "duration": 4, "description": "North-South right turn yellow"},
+            6: {"name": "EW_Protected_Right", "duration": 15, "description": "East-West protected right turn"},
+            7: {"name": "EW_Right_Yellow", "duration": 4, "description": "East-West right turn yellow"}
+        }
+        
+        # Action mapping: actions 0,1,2,3 correspond to phases 0,2,4,6 (skipping yellow phases)
+        self.action_to_phase = {
+            0: 0,  # Action 0 -> Phase 0 (NS_Straight_Left)
+            1: 2,  # Action 1 -> Phase 2 (EW_Straight_Left)
+            2: 4,  # Action 2 -> Phase 4 (NS_Protected_Right)
+            3: 6   # Action 3 -> Phase 6 (EW_Protected_Right)
         }
         
         # Episode tracking
@@ -311,7 +323,10 @@ class TrafficEnv(gym.Env):
     
     def get_action_name(self, action: int) -> str:
         """Get human-readable name for an action"""
-        return self.phases.get(action, {}).get('name', f'Action_{action}')
+        if action in self.action_to_phase:
+            phase_id = self.action_to_phase[action]
+            return self.phases.get(phase_id, {}).get('name', f'Action_{action}')
+        return f'Action_{action}'
     
     def get_phase_info(self, phase_id: int) -> Dict[str, Any]:
         """Get information about a specific phase"""
@@ -350,15 +365,14 @@ class TrafficEnv(gym.Env):
         self.current_phase = traci.trafficlight.getPhase(self.traffic_light_id)
         self.phase_duration = traci.trafficlight.getPhaseDuration(self.traffic_light_id)
         
-        # Direct phase selection - each action corresponds to a specific phase
-        if action == 0:  # NS_Left_Straight
+        # Direct phase selection - actions 0,1,2,3 map to phases 0,2,4,6
+        if action in self.action_to_phase:
+            phase_id = self.action_to_phase[action]
+            duration = self.phases[phase_id]["duration"]
+            self._set_phase(phase_id, duration)
+        else:
+            print(f"Warning: Invalid action {action}, using default phase 0")
             self._set_phase(0, self.phases[0]["duration"])
-        elif action == 1:  # NS_Yellow
-            self._set_phase(1, self.phases[1]["duration"])
-        elif action == 2:  # EW_Left_Straight
-            self._set_phase(2, self.phases[2]["duration"])
-        elif action == 3:  # EW_Yellow
-            self._set_phase(3, self.phases[3]["duration"])
     
     def _set_phase(self, phase_id: int, duration: float):
         """Set traffic light phase"""
