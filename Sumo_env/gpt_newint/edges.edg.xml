@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<edges>
+    <!-- inbound edges (approaches) : each has 4 lanes -->
+    <edge id="N_in" from="N" to="C" numLanes="4" speed="13.9" priority="3" />
+    <edge id="S_in" from="S" to="C" numLanes="4" speed="13.9" priority="3" />
+    <edge id="E_in" from="E" to="C" numLanes="4" speed="13.9" priority="3" />
+    <edge id="W_in" from="W" to="C" numLanes="4" speed="13.9" priority="3" />
+
+    <!-- outbound edges (leave the junction) -->
+    <edge id="C_N" from="C" to="N" numLanes="4" speed="13.9" priority="3" />
+    <edge id="C_S" from="C" to="S" numLanes="4" speed="13.9" priority="3" />
+    <edge id="C_E" from="C" to="E" numLanes="4" speed="13.9" priority="3" />
+    <edge id="C_W" from="C" to="W" numLanes="4" speed="13.9" priority="3" />
+</edges>
