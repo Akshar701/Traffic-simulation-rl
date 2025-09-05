@@ -273,13 +273,49 @@ reward_calculator = RewardCalculator()
 
 def calculate_reward(current_waiting_time: float,
                     current_queue_length: int,
-                    avg_speed: float,
-                    vehicle_count: int) -> float:
-    """Convenience function to calculate total reward"""
-    components = reward_calculator.calculate_reward(
-        current_waiting_time, current_queue_length, avg_speed, vehicle_count
-    )
-    return components.total_reward
+                    avg_speed: float = 0.0,
+                    vehicle_count: int = 0) -> float:
+    """
+    Simple reward function: R = (prev_waiting_time - curr_waiting_time) - 0.1 * total_queue_length
+    
+    Args:
+        current_waiting_time: Current cumulative waiting time
+        current_queue_length: Current total queue length
+        avg_speed: Average vehicle speed (unused in simple reward)
+        vehicle_count: Number of vehicles (unused in simple reward)
+        
+    Returns:
+        float: Simple reward value
+    """
+    # Get previous waiting time from the reward calculator
+    prev_waiting_time = reward_calculator.previous_waiting_time
+    
+    # For the first call, initialize with current waiting time (no reward)
+    if prev_waiting_time == 0.0:
+        reward_calculator.previous_waiting_time = current_waiting_time
+        return 0.0
+    
+    # Calculate reward: positive if waiting time decreases, small penalty for large queues
+    reward = (prev_waiting_time - current_waiting_time) - 0.1 * current_queue_length
+    
+    # Update previous waiting time for next calculation
+    reward_calculator.previous_waiting_time = current_waiting_time
+    
+    return reward
+
+def simple_reward(prev_waiting_time: float, curr_waiting_time: float, total_queue_length: int) -> float:
+    """
+    Simple reward function: R = (prev_waiting_time - curr_waiting_time) - 0.1 * total_queue_length
+    
+    Args:
+        prev_waiting_time: Previous cumulative waiting time
+        curr_waiting_time: Current cumulative waiting time  
+        total_queue_length: Total queue length across all approaches
+        
+    Returns:
+        float: Simple reward value
+    """
+    return (prev_waiting_time - curr_waiting_time) - 0.1 * total_queue_length
 
 def reward_waiting_time_change(prev_wait: float, curr_wait: float) -> float:
     """Convenience function for waiting time change reward"""
