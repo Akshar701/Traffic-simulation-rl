@@ -12,12 +12,7 @@ from enum import Enum
 from traci_manager import TraciManager, TrafficState
 import numpy as np
 
-# Import our state and reward utilities
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.state_utils import get_12d_state_vector, get_state_summary
-from utils.reward_utils import calculate_reward, simple_reward, reset_reward_calculator
+# Note: State and reward utilities are accessed through traci_manager methods
 
 class SignalPhase(Enum):
     """Traffic signal phases - simplified 4-phase system"""

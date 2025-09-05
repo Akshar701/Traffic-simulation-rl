@@ -34,26 +34,33 @@ def check_nvidia_driver():
         return False
 
 def check_cuda_installation():
-    """Check CUDA installation"""
+    """Check CUDA installation (via nvcc if available, otherwise fallback to PyTorch)"""
     print("\n🔍 Checking CUDA Installation...")
     try:
         result = subprocess.run(['nvcc', '--version'], capture_output=True, text=True)
         if result.returncode == 0:
-            print("✅ CUDA toolkit is installed")
+            print("✅ CUDA toolkit is installed (via nvcc)")
             # Extract CUDA version
-            lines = result.stdout.split('\n')
-            for line in lines:
+            for line in result.stdout.split('\n'):
                 if 'release' in line:
                     cuda_version = line.split('release')[1].strip().split(',')[0]
                     print(f"   CUDA Version: {cuda_version}")
                     break
             return True
         else:
-            print("❌ CUDA toolkit not found")
-            return False
+            print("⚠️ CUDA toolkit (nvcc) not found")
     except FileNotFoundError:
-        print("❌ nvcc not found - CUDA toolkit may not be installed")
+        print("⚠️ nvcc not found - CUDA toolkit may not be installed")
+
+    # 🔄 Fallback: check PyTorch CUDA version
+    if torch.version.cuda is not None:
+        print("✅ CUDA runtime available through PyTorch")
+        print(f"   CUDA Version (PyTorch): {torch.version.cuda}")
+        return True
+    else:
+        print("❌ No CUDA installation detected")
         return False
+
 
 def check_pytorch_cuda():
     """Check PyTorch CUDA support"""

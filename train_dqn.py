@@ -75,7 +75,7 @@ class DQNTrainer:
         
         if torch.cuda.is_available():
             print(f"✅ CUDA Available: {torch.version.cuda}")
-            print(f"🎯 GPU Device: {torch.cuda.get_device_name()}")
+            print(f"🎯 GPU Device: {torch.cuda.get_device_name(0)}")
             print(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
             print(f"🔧 CUDA Capability: {torch.cuda.get_device_capability()}")
             print(f"📊 GPU Count: {torch.cuda.device_count()}")
@@ -159,7 +159,7 @@ class DQNTrainer:
             for i in range(4):
                 count = action_counts.get(i, 0)
                 percentage = (count / steps) * 100 if steps > 0 else 0
-                action_dist.append(f"{f"Action {i}"}: {percentage:.1f}%")
+                action_dist.append(f"Action {i}: {percentage:.1f}%")
             
             print(f"   🚦 Actions: {' | '.join(action_dist)}")
         
@@ -482,7 +482,7 @@ class DQNTrainer:
         # Save plot
         plot_path = os.path.join(self.results_dir, 'training_plots.png')
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.close(fig)
         
         print(f"📈 Training plots saved: {plot_path}")
     
@@ -542,7 +542,7 @@ class DQNTrainer:
             for i in range(4):
                 count = action_counts.get(i, 0)
                 percentage = (count / steps) * 100 if steps > 0 else 0
-                action_dist.append(f"{f"Action {i}"}: {percentage:.1f}%")
+                action_dist.append(f"Action {i}: {percentage:.1f}%")
             print(f"   🚦 Actions: {' | '.join(action_dist)}")
             print("-" * 40)
         
@@ -588,13 +588,9 @@ def main():
     parser.add_argument('--device', type=str, default='auto', 
                        choices=['auto', 'cuda', 'cpu'], help='Device to use for training')
     parser.add_argument('--no-mixed-precision', action='store_true', 
-                       help='Disable mixed precision training (FP16)')
+                       help='Disable mixed precision training (default: enabled on GPU)')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--memory-size', type=int, default=10000, help='Experience replay buffer size')
-    
-    # Training options
-    parser.add_argument('--mixed-precision', action='store_true', 
-                       help='Enable mixed precision training (GPU only)')
     parser.add_argument('--performance-window', type=int, default=50,
                        help='Window size for performance evaluation')
     
@@ -616,7 +612,7 @@ def main():
         'batch_size': args.batch_size,
         'target_update_freq': 1000,
         'device': args.device,
-        'mixed_precision': args.mixed_precision or not args.no_mixed_precision,
+        'mixed_precision': not args.no_mixed_precision,
         'performance_window': args.performance_window,
         'results_dir': 'training_results',
         'models_dir': 'trained_models'

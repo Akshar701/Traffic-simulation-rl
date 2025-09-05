@@ -21,7 +21,6 @@ import os
 class DQNNetwork(nn.Module):
     """
     Neural Network Architecture for DQN
-    
     Input Layer: 12 neurons (state vector size)
     Hidden Layer 1: 256 neurons with ReLU
     Hidden Layer 2: 256 neurons with ReLU  
@@ -63,7 +62,7 @@ class ExperienceReplay:
         actions = torch.LongTensor(np.array(actions)).to(self.device)
         rewards = torch.FloatTensor(np.array(rewards)).to(self.device)
         next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
-        dones = torch.BoolTensor(np.array(dones)).to(self.device)
+        dones = torch.FloatTensor(np.array(dones)).to(self.device)
         
         return states, actions, rewards, next_states, dones
     
@@ -150,7 +149,7 @@ class DQNAgent:
             
             with torch.no_grad():
                 next_q_values = self.target_network(next_states).max(1)[0]
-                target_q_values = rewards + (self.gamma * next_q_values * ~dones)
+                target_q_values = rewards + (self.gamma * next_q_values * (1 - dones))
             
             loss = F.huber_loss(current_q_values.squeeze(), target_q_values)
         

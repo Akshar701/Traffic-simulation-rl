@@ -142,7 +142,7 @@ class DQNAgent:
                 # Set CUDA optimization flags
                 torch.backends.cudnn.benchmark = True
                 torch.backends.cudnn.deterministic = False
-                print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name()}")
+                print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
                 print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
             else:
                 self.device = torch.device('cpu')
@@ -232,7 +232,7 @@ class DQNAgent:
     def _init_gpu_memory_monitoring(self):
         """Initialize GPU memory monitoring - simplified"""
         if self.device.type == 'cuda':
-            print(f"🚀 GPU device: {torch.cuda.get_device_name()}")
+            print(f"🚀 GPU device: {torch.cuda.get_device_name(0)}")
             if hasattr(torch.cuda, 'set_per_process_memory_fraction'):
                 torch.cuda.set_per_process_memory_fraction(0.9)
                 print("📊 GPU memory fraction set to 90%")
