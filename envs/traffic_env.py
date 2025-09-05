@@ -36,7 +36,7 @@ class TrafficEnv(gym.Env):
     """
     
     def __init__(self, 
-                 config_file: str = "Sumo_env/Single intersection lhd/uniform_simulation.sumocfg",
+                 config_file: str = "Sumo_env/gpt_newint/intersection.sumocfg",
                  max_steps: int = 1000,
                  yellow_time: int = 3,
                  min_green: int = 10,
@@ -53,18 +53,22 @@ class TrafficEnv(gym.Env):
         # Simulation state
         self.simulation_running = False
         self.current_step = 0
-        self.traffic_light_id = "0"  # Default traffic light ID
+        self.traffic_light_id = "C"  # Traffic light ID for our intersection
+        
+        # Initialize traci manager for compatibility
+        from traci_manager import TraciManager
+        self.traci_manager = TraciManager(config_file)
         
         # Traffic light state
         self.current_phase = 0
         self.phase_duration = 0
         self.time_in_phase = 0
         
-        # Action space: 4 discrete actions
-        # 0: NS Green (North-South)
-        # 1: EW Green (East-West)  
-        # 2: Extend current phase
-        # 3: Skip to next phase
+        # Action space: 4 discrete actions (one for each phase)
+        # 0: NS_Left_Straight (North-South left-turn + straight lanes)
+        # 1: NS_Yellow (North-South yellow transition)
+        # 2: EW_Left_Straight (East-West left-turn + straight lanes)
+        # 3: EW_Yellow (East-West yellow transition)
         self.action_space = spaces.Discrete(4)
         
         # Observation space: 12-dimensional state vector
@@ -79,12 +83,12 @@ class TrafficEnv(gym.Env):
             dtype=np.float32
         )
         
-        # Phase definitions
+        # Phase definitions matching our SUMO configuration
         self.phases = {
-            0: {"name": "NS_Green", "duration": 30},
-            1: {"name": "NS_Yellow", "duration": 3},
-            2: {"name": "EW_Green", "duration": 30},
-            3: {"name": "EW_Yellow", "duration": 3}
+            0: {"name": "NS_Left_Straight", "duration": 30, "description": "North-South left-turn + straight lanes green"},
+            1: {"name": "NS_Yellow", "duration": 3, "description": "North-South yellow transition"},
+            2: {"name": "EW_Left_Straight", "duration": 30, "description": "East-West left-turn + straight lanes green"},
+            3: {"name": "EW_Yellow", "duration": 3, "description": "East-West yellow transition"}
         }
         
         # Episode tracking
@@ -298,10 +302,20 @@ class TrafficEnv(gym.Env):
         # For now, just print current state
         if mode == 'human':
             state_summary = get_state_summary()
+            phase_name = self.phases.get(self.current_phase, {}).get('name', f'Phase_{self.current_phase}')
             print(f"Step {self.current_step}: "
-                  f"Phase {self.current_phase}, "
+                  f"Phase {self.current_phase} ({phase_name}), "
                   f"Vehicles {state_summary.get('total_vehicles', 0)}, "
-                  f"Queue {state_summary.get('total_queue_length', 0)}")
+                  f"Queue {state_summary.get('total_queue_length', 0)}, "
+                  f"Waiting {state_summary.get('total_waiting_time', 0.0):.1f}s")
+    
+    def get_action_name(self, action: int) -> str:
+        """Get human-readable name for an action"""
+        return self.phases.get(action, {}).get('name', f'Action_{action}')
+    
+    def get_phase_info(self, phase_id: int) -> Dict[str, Any]:
+        """Get information about a specific phase"""
+        return self.phases.get(phase_id, {})
     
     def close(self):
         """Close the environment and clean up resources"""
@@ -336,16 +350,15 @@ class TrafficEnv(gym.Env):
         self.current_phase = traci.trafficlight.getPhase(self.traffic_light_id)
         self.phase_duration = traci.trafficlight.getPhaseDuration(self.traffic_light_id)
         
-        if action == 0:  # NS Green
-            self._set_phase(0, 30)
-        elif action == 1:  # EW Green
-            self._set_phase(2, 30)
-        elif action == 2:  # Extend current phase
-            new_duration = min(self.phase_duration + 10, self.max_green)
-            self._set_phase(self.current_phase, new_duration)
-        elif action == 3:  # Skip to next phase
-            next_phase = self._get_next_phase(self.current_phase)
-            self._set_phase(next_phase, 30)
+        # Direct phase selection - each action corresponds to a specific phase
+        if action == 0:  # NS_Left_Straight
+            self._set_phase(0, self.phases[0]["duration"])
+        elif action == 1:  # NS_Yellow
+            self._set_phase(1, self.phases[1]["duration"])
+        elif action == 2:  # EW_Left_Straight
+            self._set_phase(2, self.phases[2]["duration"])
+        elif action == 3:  # EW_Yellow
+            self._set_phase(3, self.phases[3]["duration"])
     
     def _set_phase(self, phase_id: int, duration: float):
         """Set traffic light phase"""
@@ -358,18 +371,6 @@ class TrafficEnv(gym.Env):
         except Exception as e:
             print(f"Error setting phase: {e}")
     
-    def _get_next_phase(self, current_phase: int) -> int:
-        """Get the next phase in the sequence"""
-        if current_phase == 0:  # NS Green -> NS Yellow
-            return 1
-        elif current_phase == 1:  # NS Yellow -> EW Green
-            return 2
-        elif current_phase == 2:  # EW Green -> EW Yellow
-            return 3
-        elif current_phase == 3:  # EW Yellow -> NS Green
-            return 0
-        else:
-            return 0  # Default to NS Green
     
     def _get_state(self) -> np.ndarray:
         """Get current state observation"""
@@ -467,7 +468,8 @@ if __name__ == "__main__":
     for i in range(10):
         action = env.action_space.sample()  # Random action
         state, reward, done, info = env.step(action)
-        print(f"Step {i+1}: Action {action}, Reward {reward:.3f}, Done {done}")
+        action_name = env.get_action_name(action)
+        print(f"Step {i+1}: Action {action} ({action_name}), Reward {reward:.3f}, Done {done}")
         
         if done:
             break

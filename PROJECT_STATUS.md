@@ -15,7 +15,7 @@
 - **`DASHBOARD_INTEGRATION_GUIDE.md`** (9.6KB, 366 lines) - Comprehensive dashboard integration guide
 - **`PROJECT_STATUS.md`** (7.7KB, 206 lines) - This file, project status and structure
 
-### SUMO Environment (`Sumo_env/Single intersection lhd/`)
+### SUMO Environment (`Sumo_env/gpt_newint/`)
 - **`cross_2lanes.net.xml`** (37KB, 493 lines) - Network definition with left-hand driving
 - **`cross_enhanced.sumocfg`** (801B, 30 lines) - Enhanced SUMO configuration with TraCI support
 - **`essential_detectors.xml`** (1.4KB, 23 lines) - 12 essential detectors for comprehensive monitoring

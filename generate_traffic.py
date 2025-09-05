@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple
 
 class TrafficGenerator:
-    def __init__(self, max_steps, n_cars_generated, out_dir="Sumo_env/Single intersection lhd"):
+    def __init__(self, max_steps, n_cars_generated, out_dir="Sumo_env/gpt_newint"):
         self._n_cars_generated = n_cars_generated
         self._max_steps = max_steps
         self._out_dir = out_dir
@@ -263,7 +263,7 @@ def main():
     
     # Get the directory where this script is located
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    out_dir = os.path.join(script_dir, "Sumo_env/Single intersection lhd")
+    out_dir = os.path.join(script_dir, "Sumo_env/gpt_newint")
     
     # Create generator
     generator = TrafficGenerator(max_steps, n_cars, out_dir)

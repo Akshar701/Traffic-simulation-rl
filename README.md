@@ -16,7 +16,7 @@ A modular traffic signal control system using SUMO simulation and reinforcement 
 │   ├── state_utils.py       # State extraction utilities
 │   └── reward_utils.py      # Reward calculation utilities
 ├── Sumo_env/
-│   └── Single intersection lhd/  # SUMO simulation files
+│   └── gpt_newint/  # SUMO simulation files
 ├── traci_manager.py         # SUMO TraCI interface
 ├── signal_controller.py     # Traffic signal control logic
 ├── live_dashboard.py        # Real-time monitoring dashboard
@@ -111,7 +111,7 @@ python3 train_dqn.py --episodes 1000 --device cuda --batch-size 128 --memory-siz
 - **Memory Optimization**: Automatic GPU memory management and cleanup
 
 ### **Gym-Compatible Environment**
-- **State Space**: 24-dimensional vector (queue length + waiting time per lane)
+- **State Space**: 12-dimensional vector (8 queue lengths + 4 one-hot phase encoding)
 - **Action Space**: 4 discrete actions (NS Green, EW Green, Extend, Skip)
 - **Reward Function**: Multi-component based on efficiency, throughput, waiting time
 
@@ -128,21 +128,21 @@ python3 train_dqn.py --episodes 1000 --device cuda --batch-size 128 --memory-siz
 ## 📊 **Environment Details**
 
 ### **State Representation**
-24-dimensional vector containing:
-- Queue length per lane (12 values)
-- Cumulative waiting time per lane (12 values)
+12-dimensional vector containing:
+- Queue lengths for 8 lane groups (N_straight_left_q, N_right_q, S_straight_left_q, S_right_q, E_straight_left_q, E_right_q, W_straight_left_q, W_right_q)
+- 4-dimensional one-hot encoding of active green phase (0-3)
 
 ### **Actions**
-- **0**: North-South Green (30s)
-- **1**: East-West Green (30s)  
-- **2**: Extend Current Phase (+10s)
-- **3**: Skip to Next Phase
+- **0**: NS_Left_Straight (North-South left-turn + straight lanes green, 30s)
+- **1**: NS_Yellow (North-South yellow transition, 3s)
+- **2**: EW_Left_Straight (East-West left-turn + straight lanes green, 30s)
+- **3**: EW_Yellow (East-West yellow transition, 3s)
 
-### **Reward Components**
-- **Waiting Time Change**: 40% weight
-- **Queue Penalty**: 20% weight
-- **Throughput Reward**: 25% weight
-- **Efficiency Reward**: 15% weight
+### **Reward Function**
+Simple reward function: `R = (prev_waiting_time - curr_waiting_time) - 0.1 * total_queue_length`
+- **Positive reward** when waiting time decreases
+- **Small penalty (0.1)** for large queues to prevent ignoring fairness
+- **Clean implementation** with no fairness or throughput terms
 
 ## 🔧 **Development**
 

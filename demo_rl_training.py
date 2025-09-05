@@ -10,7 +10,7 @@ with better congestion scenarios and optimization opportunities.
 import os
 import random
 from generate_traffic import TrafficGenerator
-from dashboard_metrics import EnhancedTrafficAnalyzer
+# from dashboard_metrics import EnhancedTrafficAnalyzer # This import is broken - commented out
 
 def demo_rl_training_features():
     """Demonstrate enhanced RL training features"""
@@ -20,7 +20,7 @@ def demo_rl_training_features():
     # Configuration for RL training
     max_steps = 1500
     n_cars = 1500  # Higher vehicle count for better challenges
-    out_dir = "Sumo_env/Single intersection lhd"
+    out_dir = "Sumo_env/gpt_newint"
     
     # Create generator
     generator = TrafficGenerator(max_steps, n_cars, out_dir)

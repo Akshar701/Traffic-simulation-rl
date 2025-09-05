@@ -7,9 +7,16 @@ Provides a clean interface for connecting to SUMO and managing simulation state
 import traci
 import time
 import os
+import numpy as np
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+# Import our state and reward utilities
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.state_utils import get_12d_state_vector, get_state_summary
+from utils.reward_utils import calculate_reward, simple_reward, reset_reward_calculator
 
 class SimulationState(Enum):
     """Simulation states"""
@@ -42,11 +49,19 @@ class TraciManager:
     """Manages SUMO simulation connection and basic operations"""
     
     def __init__(self, config_file: str = None):
-        self.config_file = config_file or "Sumo_env/Single intersection lhd/uniform_simulation.sumocfg"
+        self.config_file = config_file or "Sumo_env/gpt_newint/intersection.sumocfg"
         self.simulation_state = SimulationState.STOPPED
-        self.traffic_light_id = "0"  # Default traffic light ID
+        self.traffic_light_id = "C"  # Traffic light ID for our intersection
         self.edge_ids = []  # Will be populated when simulation starts
         self.connection = None
+        
+        # Phase definitions matching our SUMO configuration
+        self.phases = {
+            0: {"name": "NS_Left_Straight", "duration": 30, "description": "North-South left-turn + straight lanes green"},
+            1: {"name": "NS_Yellow", "duration": 3, "description": "North-South yellow transition"},
+            2: {"name": "EW_Left_Straight", "duration": 30, "description": "East-West left-turn + straight lanes green"},
+            3: {"name": "EW_Yellow", "duration": 3, "description": "East-West yellow transition"}
+        }
         
     def start_simulation(self, config_file: str = None) -> bool:
         """Start SUMO simulation with specified config"""
@@ -288,12 +303,22 @@ class TraciManager:
             if self.simulation_state != SimulationState.RUNNING:
                 return False
             
+            # Validate phase ID
+            if phase_id not in self.phases:
+                print(f"Error: Invalid phase ID {phase_id}. Valid phases: {list(self.phases.keys())}")
+                return False
+            
             # Set the phase
             traci.trafficlight.setPhase(self.traffic_light_id, phase_id)
             
-            # Set duration if provided
-            if duration is not None:
-                traci.trafficlight.setPhaseDuration(self.traffic_light_id, duration)
+            # Set duration - use default from phase definition if not provided
+            if duration is None:
+                duration = self.phases[phase_id]["duration"]
+            
+            traci.trafficlight.setPhaseDuration(self.traffic_light_id, duration)
+            
+            phase_name = self.get_action_name(phase_id)
+            print(f"Changed to phase {phase_id} ({phase_name}) with duration {duration}s")
             
             return True
             
@@ -301,19 +326,88 @@ class TraciManager:
             print(f"Error changing signal phase: {e}")
             return False
     
+    def execute_action(self, action: int) -> bool:
+        """Execute an action (0-3) corresponding to our phase system"""
+        try:
+            if self.simulation_state != SimulationState.RUNNING:
+                return False
+            
+            # Validate action
+            if action not in self.phases:
+                print(f"Error: Invalid action {action}. Valid actions: {list(self.phases.keys())}")
+                return False
+            
+            # Execute the action by setting the corresponding phase
+            return self.change_signal_phase(action)
+            
+        except Exception as e:
+            print(f"Error executing action: {e}")
+            return False
+    
     def get_signal_info(self) -> Dict[str, Any]:
         """Get current traffic signal information"""
         try:
+            current_phase = traci.trafficlight.getPhase(self.traffic_light_id)
             return {
-                "current_phase": traci.trafficlight.getPhase(self.traffic_light_id),
+                "current_phase": current_phase,
                 "phase_duration": traci.trafficlight.getPhaseDuration(self.traffic_light_id),
                 "phase_name": traci.trafficlight.getPhaseName(self.traffic_light_id),
                 "program_id": traci.trafficlight.getProgram(self.traffic_light_id),
-                "state": traci.trafficlight.getRedYellowGreenState(self.traffic_light_id)
+                "state": traci.trafficlight.getRedYellowGreenState(self.traffic_light_id),
+                "phase_info": self.phases.get(current_phase, {})
             }
         except Exception as e:
             print(f"Error getting signal info: {e}")
             return {}
+    
+    def get_12d_state_vector(self) -> np.ndarray:
+        """Get 12-dimensional state vector for RL agent"""
+        try:
+            if self.simulation_state != SimulationState.RUNNING:
+                return np.zeros(12, dtype=np.float32)
+            
+            # Use our state utils to get the 12D state vector
+            state_vector = get_12d_state_vector()
+            return state_vector
+            
+        except Exception as e:
+            print(f"Error getting 12D state vector: {e}")
+            return np.zeros(12, dtype=np.float32)
+    
+    def get_simple_reward(self, prev_waiting_time: float = None, prev_queue_length: int = None) -> float:
+        """Calculate simple reward using our reward function"""
+        try:
+            if self.simulation_state != SimulationState.RUNNING:
+                return 0.0
+            
+            # Get current state summary
+            state_summary = get_state_summary()
+            current_waiting_time = state_summary.get('total_waiting_time', 0.0)
+            current_queue_length = state_summary.get('total_queue_length', 0)
+            
+            if prev_waiting_time is not None and prev_queue_length is not None:
+                # Use direct calculation
+                return simple_reward(prev_waiting_time, current_waiting_time, current_queue_length)
+            else:
+                # Use the integrated reward calculator
+                return calculate_reward(
+                    current_waiting_time,
+                    current_queue_length,
+                    state_summary.get('avg_speed', 0.0),
+                    state_summary.get('total_vehicles', 0)
+                )
+                
+        except Exception as e:
+            print(f"Error calculating reward: {e}")
+            return 0.0
+    
+    def get_action_name(self, action: int) -> str:
+        """Get human-readable name for an action"""
+        return self.phases.get(action, {}).get('name', f'Action_{action}')
+    
+    def get_phase_info(self, phase_id: int) -> Dict[str, Any]:
+        """Get information about a specific phase"""
+        return self.phases.get(phase_id, {})
     
     def get_edge_metrics(self, edge_id: str) -> Dict[str, Any]:
         """Get detailed metrics for a specific edge"""
@@ -355,6 +449,14 @@ class TraciManager:
         except Exception as e:
             print(f"Error stopping simulation: {e}")
     
+    def reset_reward_calculator(self):
+        """Reset the reward calculator for a new episode"""
+        try:
+            reset_reward_calculator()
+            print("Reward calculator reset")
+        except Exception as e:
+            print(f"Error resetting reward calculator: {e}")
+    
     def run_simulation_for_duration(self, duration: int, step_size: int = 1):
         """Run simulation for a specified duration"""
         if not self.start_simulation():
@@ -386,11 +488,35 @@ if __name__ == "__main__":
     # Create traci manager
     manager = TraciManager()
     
+    print("🚀 TraciManager Demo with Updated Features")
+    print("=" * 50)
+    
+    # Show phase definitions
+    print("\n📋 Phase Definitions:")
+    for phase_id, phase_info in manager.phases.items():
+        print(f"   Phase {phase_id}: {phase_info['name']} ({phase_info['description']})")
+    
+    # Show action names
+    print(f"\n🎯 Action Names:")
+    for action in range(4):
+        action_name = manager.get_action_name(action)
+        print(f"   Action {action}: {action_name}")
+    
     # Run a simple simulation
-    print("Starting simulation...")
-    success = manager.run_simulation_for_duration(1000)
+    print(f"\n🚦 Starting simulation...")
+    success = manager.run_simulation_for_duration(100, step_size=10)
     
     if success:
-        print("Simulation completed successfully")
+        print("✅ Simulation completed successfully")
+        
+        # Demonstrate state vector and reward calculation
+        print(f"\n📊 Final State:")
+        state_vector = manager.get_12d_state_vector()
+        print(f"   State vector shape: {state_vector.shape}")
+        print(f"   State vector: {state_vector}")
+        
+        reward = manager.get_simple_reward()
+        print(f"   Final reward: {reward:.3f}")
+        
     else:
-        print("Simulation failed")
+        print("❌ Simulation failed")

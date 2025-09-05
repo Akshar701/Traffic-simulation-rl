@@ -42,7 +42,7 @@ class DQNTrainer:
         
         # Initialize environment and agent
         self.env = TrafficEnv(
-            config_file=config.get('config_file', 'Sumo_env/Single intersection lhd/uniform_simulation.sumocfg'),
+            config_file=config.get('config_file', 'Sumo_env/gpt_newint/intersection.sumocfg'),
             max_steps=config.get('max_steps', 1000)
         )
         
@@ -602,7 +602,7 @@ def main():
     
     # Training configuration
     config = {
-        'config_file': f'Sumo_env/Single intersection lhd/{args.config}',
+        'config_file': f'Sumo_env/gpt_newint/{args.config}',
         'max_steps': 1000,
         'state_size': 12,
         'action_size': 4,

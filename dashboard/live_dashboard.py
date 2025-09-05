@@ -233,7 +233,7 @@ class LiveDashboard:
         """Run simulation in separate thread"""
         try:
             # Start simulation with appropriate config
-            config_file = f"Sumo_env/Single intersection lhd/{scenario}_simulation.sumocfg"
+            config_file = f"Sumo_env/gpt_newint/intersection.sumocfg"
             
             if not self.traci_manager.start_simulation(config_file):
                 raise Exception("Failed to start SUMO simulation")

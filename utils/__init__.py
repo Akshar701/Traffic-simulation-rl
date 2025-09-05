@@ -19,6 +19,7 @@ from .reward_utils import (
     RewardCalculator,
     RewardComponents,
     calculate_reward,
+    simple_reward,
     reward_waiting_time_change,
     get_reward_summary,
     reset_reward_calculator,
@@ -28,7 +29,7 @@ from .reward_utils import (
 __all__ = [
     # State utilities
     'StateExtractor',
-    'LaneState', 
+    'ApproachState', 
     'get_12d_state_vector',
     'get_state_summary',
     'get_detailed_state_dict',
@@ -38,6 +39,7 @@ __all__ = [
     'RewardCalculator',
     'RewardComponents',
     'calculate_reward',
+    'simple_reward',
     'reward_waiting_time_change',
     'get_reward_summary',
     'reset_reward_calculator',
