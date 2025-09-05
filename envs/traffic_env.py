@@ -380,7 +380,7 @@ class TrafficEnv(gym.Env):
         except Exception as e:
             print(f"Error getting state: {e}")
             # Return zero state if error occurs
-            return np.zeros(24, dtype=np.float32)
+            return np.zeros(12, dtype=np.float32)
     
     def _calculate_reward(self) -> float:
         """Calculate reward for current state"""

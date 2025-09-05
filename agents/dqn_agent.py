@@ -100,7 +100,7 @@ class DQNAgent:
     """
     
     def __init__(self, 
-                 state_size: int = 8,
+                 state_size: int = 12,
                  action_size: int = 4,
                  hidden_size: int = 256,
                  learning_rate: float = 1e-4,
@@ -599,7 +599,7 @@ class AdaptiveDQNAgent(DQNAgent):
     """
     
     def __init__(self, 
-                 state_size: int = 8,
+                 state_size: int = 12,
                  action_size: int = 4,
                  hidden_size: int = 256,
                  learning_rate: float = 1e-4,

@@ -27,24 +27,20 @@ class StateExtractor:
         # Each approach has dedicated lanes for different movements
         self.approach_edges = {
             'north': {
-                'straight': ['N_in'],         # Lanes 1-2 (middle lanes for straight)
-                'right': ['N_in'],            # Lane 0 (leftmost lane for right turn)
-                'left': ['N_in']              # Lane 3 (rightmost lane for left turn)
+                'straight_left': ['N_in'],    # Lanes 0, 1, 2 (left-turn + straight lanes)
+                'right': ['N_in']             # Lane 3 (right-turn lane)
             },
             'east': {
-                'straight': ['E_in'],         # Lanes 1-2 (middle lanes for straight)
-                'right': ['E_in'],            # Lane 0 (leftmost lane for right turn)
-                'left': ['E_in']              # Lane 3 (rightmost lane for left turn)
+                'straight_left': ['E_in'],    # Lanes 0, 1, 2 (left-turn + straight lanes)
+                'right': ['E_in']             # Lane 3 (right-turn lane)
             },
             'south': {
-                'straight': ['S_in'],         # Lanes 1-2 (middle lanes for straight)
-                'right': ['S_in'],            # Lane 0 (leftmost lane for right turn)
-                'left': ['S_in']              # Lane 3 (rightmost lane for left turn)
+                'straight_left': ['S_in'],    # Lanes 0, 1, 2 (left-turn + straight lanes)
+                'right': ['S_in']             # Lane 3 (right-turn lane)
             },
             'west': {
-                'straight': ['W_in'],         # Lanes 1-2 (middle lanes for straight)
-                'right': ['W_in'],            # Lane 0 (leftmost lane for right turn)
-                'left': ['W_in']              # Lane 3 (rightmost lane for left turn)
+                'straight_left': ['W_in'],    # Lanes 0, 1, 2 (left-turn + straight lanes)
+                'right': ['W_in']             # Lane 3 (right-turn lane)
             }
         }
         
@@ -60,10 +56,9 @@ class StateExtractor:
             for edge_id in edges:
                 # Get all lanes in this edge
                 for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
-                    # For straight: use lanes 1, 2 (middle lanes)
-                    # For left: use lane 3 (rightmost lane)
-                    # For right: use lane 0 (leftmost lane)
-                    if movement_type == 'straight' and 1 <= lane_idx <= 2:
+                    # For straight_left: use lanes 0, 1, 2 (left-turn + straight lanes)
+                    # For right: use lane 3 (right-turn lane)
+                    if movement_type == 'straight_left' and 0 <= lane_idx <= 2:
                         lane_id = f"{edge_id}_{lane_idx}"
                         # Get vehicles on the lane
                         vehicles = traci.lane.getLastStepVehicleIDs(lane_id)
@@ -73,17 +68,7 @@ class StateExtractor:
                             speed = traci.vehicle.getSpeed(vehicle_id)
                             if speed < 0.1:  # Consider stopped if speed < 0.1 m/s
                                 total_queue += 1
-                    elif movement_type == 'right' and lane_idx == 0:
-                        lane_id = f"{edge_id}_{lane_idx}"
-                        # Get vehicles on the lane
-                        vehicles = traci.lane.getLastStepVehicleIDs(lane_id)
-                        
-                        for vehicle_id in vehicles:
-                            # Check if vehicle is stopped or moving very slowly
-                            speed = traci.vehicle.getSpeed(vehicle_id)
-                            if speed < 0.1:  # Consider stopped if speed < 0.1 m/s
-                                total_queue += 1
-                    elif movement_type == 'left' and lane_idx == 3:
+                    elif movement_type == 'right' and lane_idx == 3:
                         lane_id = f"{edge_id}_{lane_idx}"
                         # Get vehicles on the lane
                         vehicles = traci.lane.getLastStepVehicleIDs(lane_id)
@@ -109,9 +94,9 @@ class StateExtractor:
             for edge_id in edges:
                 # Get all lanes in this edge
                 for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
-                    # For straight+left: use lanes 0, 1, 2
-                    # For right: use lane 3
-                    if movement_type == 'straight_left' and lane_idx < 3:
+                    # For straight_left: use lanes 0, 1, 2 (left-turn + straight lanes)
+                    # For right: use lane 3 (right-turn lane)
+                    if movement_type == 'straight_left' and 0 <= lane_idx <= 2:
                         lane_id = f"{edge_id}_{lane_idx}"
                         # Get vehicles on the lane
                         vehicles = traci.lane.getLastStepVehicleIDs(lane_id)
@@ -145,9 +130,9 @@ class StateExtractor:
             for edge_id in edges:
                 # Get all lanes in this edge
                 for lane_idx in range(traci.edge.getLaneNumber(edge_id)):
-                    # For straight+left: use lanes 0, 1, 2
-                    # For right: use lane 3
-                    if movement_type == 'straight_left' and lane_idx < 3:
+                    # For straight_left: use lanes 0, 1, 2 (left-turn + straight lanes)
+                    # For right: use lane 3 (right-turn lane)
+                    if movement_type == 'straight_left' and 0 <= lane_idx <= 2:
                         lane_id = f"{edge_id}_{lane_idx}"
                         vehicles = traci.lane.getLastStepVehicleIDs(lane_id)
                         total_vehicles += len(vehicles)
@@ -175,8 +160,8 @@ class StateExtractor:
     def get_current_phase(self) -> int:
         """Get current traffic light phase"""
         try:
-            # Get the traffic light ID (usually "0" for single intersection)
-            traffic_light_id = "0"
+            # Get the traffic light ID (use "C" for the gpt_newint intersection)
+            traffic_light_id = "C"
             current_phase = traci.trafficlight.getPhase(traffic_light_id)
             return current_phase
         except Exception as e:
@@ -189,41 +174,33 @@ class StateExtractor:
         
         Returns:
             np.ndarray: 12-dimensional vector with format:
-            [north_straight_queue, north_right_queue, north_left_queue, east_straight_queue, 
-             east_right_queue, east_left_queue, south_straight_queue, south_right_queue,
-             south_left_queue, west_straight_queue, west_right_queue, west_left_queue,
-             phase_0, phase_1, phase_2, phase_3]
+            [N_straight_left_q, N_right_q, S_straight_left_q, S_right_q,
+             E_straight_left_q, E_right_q, W_straight_left_q, W_right_q,
+             current_phase_one_hot_0, current_phase_one_hot_1, current_phase_one_hot_2, current_phase_one_hot_3]
         """
         try:
             # Get queue lengths for each approach and movement type
-            north_straight_queue = self.get_approach_queue_length('north', 'straight')
-            north_right_queue = self.get_approach_queue_length('north', 'right')
-            north_left_queue = self.get_approach_queue_length('north', 'left')
-            east_straight_queue = self.get_approach_queue_length('east', 'straight')
-            east_right_queue = self.get_approach_queue_length('east', 'right')
-            east_left_queue = self.get_approach_queue_length('east', 'left')
-            south_straight_queue = self.get_approach_queue_length('south', 'straight')
-            south_right_queue = self.get_approach_queue_length('south', 'right')
-            south_left_queue = self.get_approach_queue_length('south', 'left')
-            west_straight_queue = self.get_approach_queue_length('west', 'straight')
-            west_right_queue = self.get_approach_queue_length('west', 'right')
-            west_left_queue = self.get_approach_queue_length('west', 'left')
+            N_straight_left_q = self.get_approach_queue_length('north', 'straight_left')
+            N_right_q = self.get_approach_queue_length('north', 'right')
+            S_straight_left_q = self.get_approach_queue_length('south', 'straight_left')
+            S_right_q = self.get_approach_queue_length('south', 'right')
+            E_straight_left_q = self.get_approach_queue_length('east', 'straight_left')
+            E_right_q = self.get_approach_queue_length('east', 'right')
+            W_straight_left_q = self.get_approach_queue_length('west', 'straight_left')
+            W_right_q = self.get_approach_queue_length('west', 'right')
             
             # Get current phase and create one-hot encoding
             current_phase = self.get_current_phase()
-            phase_encoding = [0, 0, 0, 0]  # Assuming 4 phases
+            phase_encoding = [0, 0, 0, 0]  # 4 phases (0-3)
             if 0 <= current_phase < 4:
                 phase_encoding[current_phase] = 1
             
             # Combine into 12D state vector (8 queue lengths + 4 phase encoding)
             state_vector = [
-                north_straight_queue, north_right_queue, north_left_queue, east_straight_queue,
-                east_right_queue, east_left_queue, south_straight_queue, south_right_queue,
-                south_left_queue, west_straight_queue, west_right_queue, west_left_queue
+                N_straight_left_q, N_right_q, S_straight_left_q, S_right_q,
+                E_straight_left_q, E_right_q, W_straight_left_q, W_right_q,
+                phase_encoding[0], phase_encoding[1], phase_encoding[2], phase_encoding[3]
             ]
-            
-            # Add phase encoding to make it 12D
-            state_vector.extend(phase_encoding)
             
             return np.array(state_vector, dtype=np.float32)
             
