@@ -47,8 +47,8 @@ def test_dqn_agent():
         
         # Test agent action selection
         print("🎯 Testing agent action selection...")
-        action = agent.act(state, training=True)
-        print(f"✅ Agent selected action: {action} ({agent.get_action_name(action)})")
+        action = agent.act(state)
+        print(f"✅ Agent selected action: {action}")
         
         # Test environment step
         print("⚡ Testing environment step...")
@@ -67,11 +67,11 @@ def test_dqn_agent():
         print("🔄 Testing multiple steps...")
         for i in range(5):
             state = next_state
-            action = agent.act(state, training=True)
+            action = agent.act(state)
             next_state, reward, done, info = env.step(action)
             agent.remember(state, action, reward, next_state, done)
             
-            print(f"   Step {i+1}: Action {action} ({agent.get_action_name(action)}), "
+            print(f"   Step {i+1}: Action {action}, "
                   f"Reward {reward:.3f}, Done {done}")
             
             if done:
@@ -88,14 +88,11 @@ def test_dqn_agent():
         else:
             print(f"⚠️ Not enough experiences for training (need {agent.batch_size}, have {len(agent.memory)})")
         
-        # Test agent statistics
-        print("📊 Testing agent statistics...")
-        stats = agent.get_training_stats()
-        print(f"✅ Agent statistics:")
-        print(f"   Episodes: {stats['episode_count']}")
-        print(f"   Steps: {stats['step_count']}")
-        print(f"   Epsilon: {stats['epsilon']:.3f}")
-        print(f"   Memory size: {stats['memory_size']}")
+        # Test agent basic info
+        print("📊 Testing agent basic info...")
+        print(f"✅ Agent epsilon: {agent.epsilon}")
+        print(f"✅ Agent memory size: {len(agent.memory)}")
+        print(f"✅ Agent device: {agent.device}")
         
         # Clean up
         env.close()
@@ -120,11 +117,11 @@ def test_agent_architecture():
         import torch
         
         # Create network
-        network = DQNNetwork(input_size=24, hidden_size=256, output_size=4)
+        network = DQNNetwork(input_size=12, hidden_size=256, output_size=4)
         print("✅ Network created successfully")
         
         # Test forward pass
-        test_input = torch.randn(1, 24)  # Batch size 1, 24 features
+        test_input = torch.randn(1, 12)  # Batch size 1, 12 features
         output = network(test_input)
         
         print(f"✅ Forward pass successful")

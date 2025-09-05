@@ -65,10 +65,24 @@ from envs.traffic_env import TrafficEnv
 
 # Create environment and agent with GPU
 env = TrafficEnv()
-agent = DQNAgent(state_size=24, action_size=4, device='cuda', mixed_precision=True)
+agent = DQNAgent(state_size=12, action_size=4, device='cuda', mixed_precision=True)
 
 # Train for one episode
-total_reward, steps, step_rewards = agent.train_episode(env)
+state = env.reset()
+total_reward = 0
+for step in range(1000):
+    action = agent.act(state)
+    next_state, reward, done, info = env.step(action)
+    agent.remember(state, action, reward, next_state, done)
+    
+    if len(agent.memory) >= agent.batch_size:
+        loss = agent.replay()
+    
+    state = next_state
+    total_reward += reward
+    
+    if done:
+        break
 
 # Save trained agent
 agent.save("trained_model.pth")

@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from agents.dqn_agent import AdaptiveDQNAgent
+from agents.dqn_agent import DQNAgent
 from envs.traffic_env import TrafficEnv
 
 class DQNTrainer:
@@ -46,8 +46,8 @@ class DQNTrainer:
             max_steps=config.get('max_steps', 1000)
         )
         
-        # Use AdaptiveDQNAgent instead of base DQNAgent
-        self.agent = AdaptiveDQNAgent(
+        # Use DQNAgent
+        self.agent = DQNAgent(
             state_size=config.get('state_size', 12),
             action_size=config.get('action_size', 4),
             hidden_size=config.get('hidden_size', 256),
@@ -57,13 +57,10 @@ class DQNTrainer:
             epsilon_min=config.get('epsilon_min', 0.01),
             epsilon_decay=config.get('epsilon_decay', 0.995),
             memory_size=config.get('memory_size', 10000),
-            batch_size=config.get('batch_size', 32),
+            batch_size=config.get('batch_size', 64),
             target_update_freq=config.get('target_update_freq', 1000),
             device=config.get('device', 'auto'),
-            mixed_precision=config.get('mixed_precision', True),
-            adaptive_lr=config.get('adaptive_lr', True),
-            adaptive_epsilon=config.get('adaptive_epsilon', True),
-            performance_window=config.get('performance_window', 50)
+            mixed_precision=config.get('mixed_precision', True)
         )
         
         # Training tracking
@@ -112,8 +109,7 @@ class DQNTrainer:
         print(f"   • Learning Rate: {self.config.get('learning_rate', 1e-4)}")
         print(f"   • Initial Epsilon: {self.config.get('epsilon', 1.0)}")
         print(f"   • Target Network Update: Every {self.config.get('target_update_freq', 1000)} steps")
-        print(f"   • Adaptive Learning Rate: {self.config.get('adaptive_lr', True)}")
-        print(f"   • Adaptive Epsilon: {self.config.get('adaptive_epsilon', True)}")
+        print(f"   • Mixed Precision: {self.config.get('mixed_precision', True)}")
         print(f"   • Performance Window: {self.config.get('performance_window', 50)} episodes")
         print("="*60)
         
@@ -141,23 +137,13 @@ class DQNTrainer:
             memory_mb = torch.cuda.memory_allocated() / 1e6
             gpu_memory = f" | 🚀 GPU: {memory_mb:.1f}MB"
         
-        # Get adaptive stats if available
-        adaptive_info = ""
-        if hasattr(self.agent, 'get_adaptive_stats'):
-            try:
-                adaptive_stats = self.agent.get_adaptive_stats()
-                current_lr = adaptive_stats.get('current_lr', 0)
-                lr_factor = adaptive_stats.get('lr_change_factor', 1.0)
-                performance_level = adaptive_stats.get('recent_performance_level', 'unknown')
-                
-                adaptive_info = f" | 📚 LR: {current_lr:.2e} ({lr_factor:.2f}x) | 🎯 {performance_level.upper()}"
-            except:
-                pass
+        # Get basic training info
+        training_info = ""
         
         # Print episode summary
         print(f"Episode {episode:4d} | {performance}")
         print(f"   📈 Reward: {total_reward:7.2f} {reward_trend}")
-        print(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}{gpu_memory}{adaptive_info}")
+        print(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}{gpu_memory}")
         print(f"   📊 Avg (10): {avg_reward:7.2f}")
         
         if training_loss is not None:
@@ -173,7 +159,7 @@ class DQNTrainer:
             for i in range(4):
                 count = action_counts.get(i, 0)
                 percentage = (count / steps) * 100 if steps > 0 else 0
-                action_dist.append(f"{self.agent.get_action_name(i)}: {percentage:.1f}%")
+                action_dist.append(f"{f"Action {i}"}: {percentage:.1f}%")
             
             print(f"   🚦 Actions: {' | '.join(action_dist)}")
         
@@ -238,23 +224,9 @@ class DQNTrainer:
             else:
                 print(f"   ⚠️  Agent may need more training or hyperparameter tuning")
         
-        # Print adaptive hyperparameter summary
-        if hasattr(self.agent, 'get_adaptive_stats'):
-            try:
-                adaptive_stats = self.agent.get_adaptive_stats()
-                print(f"\n🎯 Adaptive Hyperparameter Summary:")
-                print(f"   📚 Learning Rate Changes: {adaptive_stats.get('lr_change_factor', 1.0):.2f}x")
-                print(f"   🎲 Epsilon Changes: {adaptive_stats.get('epsilon_change_factor', 1.0):.2f}x")
-                print(f"   🔄 Total Adaptations: {adaptive_stats.get('adaptation_count', 0)}")
-                
-                # Print recommendations
-                recommendations = adaptive_stats.get('recommendations', [])
-                if recommendations:
-                    print(f"\n💡 Recommendations:")
-                    for rec in recommendations:
-                        print(f"   • {rec}")
-            except Exception as e:
-                print(f"⚠️ Could not get adaptive stats: {e}")
+        # Print basic training summary
+        print(f"\n🎯 Training Summary:")
+        print(f"   📚 Final Learning Rate: {self.agent.optimizer.param_groups[0]['lr']:.2e}")
         
         print("="*60)
         
@@ -295,17 +267,10 @@ class DQNTrainer:
                 'timestamp': datetime.now().isoformat()
             }
             
-            # Add adaptive hyperparameter data if available
-            if hasattr(self.agent, 'get_adaptive_stats'):
-                try:
-                    adaptive_stats = self.agent.get_adaptive_stats()
-                    training_data.update({
-                        'current_lr': adaptive_stats.get('current_lr', 0),
-                        'performance_level': adaptive_stats.get('recent_performance_level', 'unknown'),
-                        'improvement_rate': adaptive_stats.get('recent_improvement_rate', 0)
-                    })
-                except:
-                    pass
+            # Add basic training data
+            training_data.update({
+                'current_lr': self.agent.optimizer.param_groups[0]['lr']
+            })
             
             self.training_history.append(training_data)
             
@@ -440,8 +405,7 @@ class DQNTrainer:
         print(f"📊 Training results saved to: {self.results_dir}")
         print(f"   📄 JSON files: training_history.json, evaluation_history.json")
         print(f"   📊 CSV files: training_history.csv, evaluation_history.csv, training_losses.csv")
-        if hasattr(self.agent, 'adaptation_history') and self.agent.adaptation_history:
-            print(f"   🎯 Adaptive files: adaptive_history.json, adaptive_history.csv")
+        print(f"   🎯 Training files saved successfully")
     
     def create_training_plots(self):
         """Create training visualization plots with adaptive features"""
@@ -454,26 +418,11 @@ class DQNTrainer:
         epsilons = [h['epsilon'] for h in self.training_history]
         steps = [h['steps'] for h in self.training_history]
         
-        # Extract adaptive data if available
-        learning_rates = []
-        performance_levels = []
-        if hasattr(self.agent, 'get_adaptive_stats'):
-            try:
-                for h in self.training_history:
-                    if 'current_lr' in h:
-                        learning_rates.append(h['current_lr'])
-                    else:
-                        learning_rates.append(None)
-                    
-                    if 'performance_level' in h:
-                        performance_levels.append(h['performance_level'])
-                    else:
-                        performance_levels.append(None)
-            except:
-                pass
+        # Extract learning rate data
+        learning_rates = [h.get('current_lr', 0) for h in self.training_history]
         
-        # Create subplots - now 2x3 to include adaptive plots
-        fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(18, 12))
+        # Create subplots - 2x2 for basic training plots
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
         
         # Episode rewards
         ax1.plot(episodes, rewards, 'b-', alpha=0.6)
@@ -525,55 +474,8 @@ class DQNTrainer:
                     transform=ax4.transAxes)
             ax4.set_title('Training Loss')
         
-        # Learning rate changes (adaptive feature)
-        if learning_rates and any(lr is not None for lr in learning_rates):
-            valid_episodes = [ep for ep, lr in zip(episodes, learning_rates) if lr is not None]
-            valid_lrs = [lr for lr in learning_rates if lr is not None]
-            
-            ax5.plot(valid_episodes, valid_lrs, 'purple', linewidth=2, marker='o')
-            ax5.set_title('Learning Rate Changes')
-            ax5.set_xlabel('Episode')
-            ax5.set_ylabel('Learning Rate')
-            ax5.set_yscale('log')
-            ax5.grid(True, alpha=0.3)
-        else:
-            ax5.text(0.5, 0.5, 'No learning rate data', ha='center', va='center', 
-                    transform=ax5.transAxes)
-            ax5.set_title('Learning Rate Changes')
-        
-        # Performance summary with adaptive features
-        ax6.axis('off')
-        final_loss = f"{self.agent.training_losses[-1]:.6f}" if self.agent.training_losses else "N/A"
-        
-        # Get adaptive stats if available
-        adaptive_summary = ""
-        if hasattr(self.agent, 'get_adaptive_stats'):
-            try:
-                adaptive_stats = self.agent.get_adaptive_stats()
-                adaptive_summary = f"""
-Adaptive Features:
-• Learning Rate Changes: {adaptive_stats.get('lr_change_factor', 1.0):.2f}x
-• Epsilon Changes: {adaptive_stats.get('epsilon_change_factor', 1.0):.2f}x
-• Total Adaptations: {adaptive_stats.get('adaptation_count', 0)}
-• Performance Level: {adaptive_stats.get('recent_performance_level', 'unknown').upper()}
-                """
-            except:
-                adaptive_summary = "Adaptive features not available"
-        
-        summary_text = f"""
-Training Summary:
-• Total Episodes: {len(episodes)}
-• Final Epsilon: {epsilons[-1]:.3f}
-• Best Reward: {max(rewards):.2f}
-• Worst Reward: {min(rewards):.2f}
-• Avg Reward: {np.mean(rewards):.2f}
-• Training Steps: {len(self.agent.training_losses) if self.agent.training_losses else 0}
-• Final Loss: {final_loss}
-
-{adaptive_summary}
-        """
-        ax6.text(0.1, 0.9, summary_text, transform=ax6.transAxes, 
-                fontsize=10, verticalalignment='top', fontfamily='monospace')
+        # Add title and layout
+        plt.suptitle('DQN Training Results', fontsize=16, fontweight='bold')
         
         plt.tight_layout()
         
@@ -604,7 +506,7 @@ Training Summary:
             actions_taken = []
             
             while steps < self.config.get('max_steps', 1000):
-                action = self.agent.act(state, training=False)
+                action = self.agent.act(state)
                 next_state, reward, done, info = self.env.step(action)
                 
                 actions_taken.append(action)
@@ -640,7 +542,7 @@ Training Summary:
             for i in range(4):
                 count = action_counts.get(i, 0)
                 percentage = (count / steps) * 100 if steps > 0 else 0
-                action_dist.append(f"{self.agent.get_action_name(i)}: {percentage:.1f}%")
+                action_dist.append(f"{f"Action {i}"}: {percentage:.1f}%")
             print(f"   🚦 Actions: {' | '.join(action_dist)}")
             print("-" * 40)
         
@@ -664,16 +566,10 @@ Training Summary:
         else:
             print(f"   🔴 Performance: POOR")
         
-        # Print adaptive hyperparameter summary if available
-        if hasattr(self.agent, 'get_adaptive_stats'):
-            try:
-                adaptive_stats = self.agent.get_adaptive_stats()
-                print(f"\n🎯 Adaptive Hyperparameter Summary:")
-                print(f"   📚 Learning Rate: {adaptive_stats.get('current_lr', 0):.2e}")
-                print(f"   🎲 Epsilon: {self.agent.epsilon:.3f}")
-                print(f"   🔄 Total Adaptations: {adaptive_stats.get('adaptation_count', 0)}")
-            except:
-                pass
+        # Print basic training summary
+        print(f"\n🎯 Training Summary:")
+        print(f"   📚 Learning Rate: {self.agent.optimizer.param_groups[0]['lr']:.2e}")
+        print(f"   🎲 Epsilon: {self.agent.epsilon:.3f}")
         
         print("="*60)
         
@@ -696,11 +592,9 @@ def main():
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--memory-size', type=int, default=10000, help='Experience replay buffer size')
     
-    # New adaptive hyperparameter options
-    parser.add_argument('--no-adaptive-lr', action='store_true', 
-                       help='Disable adaptive learning rate')
-    parser.add_argument('--no-adaptive-epsilon', action='store_true', 
-                       help='Disable adaptive epsilon decay')
+    # Training options
+    parser.add_argument('--mixed-precision', action='store_true', 
+                       help='Enable mixed precision training (GPU only)')
     parser.add_argument('--performance-window', type=int, default=50,
                        help='Window size for performance evaluation')
     
@@ -722,9 +616,7 @@ def main():
         'batch_size': args.batch_size,
         'target_update_freq': 1000,
         'device': args.device,
-        'mixed_precision': not args.no_mixed_precision,
-        'adaptive_lr': not args.no_adaptive_lr,
-        'adaptive_epsilon': not args.no_adaptive_epsilon,
+        'mixed_precision': args.mixed_precision or not args.no_mixed_precision,
         'performance_window': args.performance_window,
         'results_dir': 'training_results',
         'models_dir': 'trained_models'
