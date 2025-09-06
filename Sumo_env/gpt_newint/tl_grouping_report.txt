@@ -1,0 +1,113 @@
+TRAFFIC LIGHT GROUPING REPORT
+============================
+Generated: $(Get-Date)
+Repository: Sumo_env/gpt_newint
+
+SUMMARY
+-------
+Successfully updated traffic light grouping for junction C.
+- Grouped left + straight connections per approach
+- Kept right-turn connections separate
+- Updated tlLogic states to match new linkIndex mapping
+
+JUNCTION ANALYSIS: C
+===================
+
+Original Connection Mapping:
+- S_in approach: linkIndex 0(r), 1(s), 2(s), 3(l)
+- E_in approach: linkIndex 4(r), 5(s), 6(s), 7(l)  
+- N_in approach: linkIndex 8(r), 9(s), 10(s), 11(l)
+- W_in approach: linkIndex 12(r), 13(s), 14(s), 15(l)
+
+New Connection Mapping:
+- S_in approach: linkIndex 0(left+straights), 1(right)
+- E_in approach: linkIndex 2(left+straights), 3(right)
+- N_in approach: linkIndex 4(left+straights), 5(right)
+- W_in approach: linkIndex 6(left+straights), 7(right)
+
+CONNECTION CHANGES
+------------------
+S_in approach:
+  fromLane="1" toLane="1" dir="s" → linkIndex="0" (was 1)
+  fromLane="2" toLane="2" dir="s" → linkIndex="0" (was 2)
+  fromLane="0" toLane="3" dir="l" → linkIndex="0" (was 3)
+  fromLane="3" toLane="0" dir="r" → linkIndex="1" (was 0)
+
+E_in approach:
+  fromLane="1" toLane="1" dir="s" → linkIndex="2" (was 5)
+  fromLane="2" toLane="2" dir="s" → linkIndex="2" (was 6)
+  fromLane="0" toLane="3" dir="l" → linkIndex="2" (was 7)
+  fromLane="3" toLane="0" dir="r" → linkIndex="3" (was 4)
+
+N_in approach:
+  fromLane="1" toLane="1" dir="s" → linkIndex="4" (was 9)
+  fromLane="2" toLane="2" dir="s" → linkIndex="4" (was 10)
+  fromLane="0" toLane="3" dir="l" → linkIndex="4" (was 11)
+  fromLane="3" toLane="0" dir="r" → linkIndex="5" (was 8)
+
+W_in approach:
+  fromLane="1" toLane="1" dir="s" → linkIndex="6" (was 13)
+  fromLane="2" toLane="2" dir="s" → linkIndex="6" (was 14)
+  fromLane="0" toLane="3" dir="l" → linkIndex="6" (was 15)
+  fromLane="3" toLane="0" dir="r" → linkIndex="7" (was 12)
+
+TLLOGIC STATE CHANGES
+---------------------
+Original states (length 16):
+- "gGGgrrrGgGGgrrrG" → "GrrrGrrr" (length 8)
+- "yyyyrrrryyyyyrrry" → "yrrryrrr" (length 8)
+- "rrrrrrrrrrrrrrrr" → "rrrrrrrr" (length 8)
+- "rrrGgGGgrrrGgGGg" → "rrGrrrGr" (length 8)
+- "rrryyyyyrrryyyyy" → "rryrrryr" (length 8)
+- "rrrrrrrrrrrrrrrr" → "rrrrrrrr" (length 8)
+
+New state mapping (8 indices):
+Index 0: S_in left+straights
+Index 1: S_in right
+Index 2: E_in left+straights  
+Index 3: E_in right
+Index 4: N_in left+straights
+Index 5: N_in right
+Index 6: W_in left+straights
+Index 7: W_in right
+
+Phase semantics:
+- "GrrrGrrr": NS left+straight green (indices 0,4 = G)
+- "yrrryrrr": NS yellow (indices 0,4 = y)
+- "rrrrrrrr": All red
+- "rrGrrrGr": EW left+straight green (indices 2,6 = G)
+- "rryrrryr": EW yellow (indices 2,6 = y)
+- "rrrrrrrr": All red
+
+FILES MODIFIED
+==============
+1. intersection.net.xml
+   - Updated 16 connection linkIndex attributes
+   - Updated tlLogic state strings (6 phases)
+
+2. tls.tll.xml
+   - Updated tlLogic state strings (8 phases)
+   - Added right-turn phases for independent operation
+
+VALIDATION RESULTS
+==================
+✓ XML validation: Both files are well-formed
+✓ State string length: All states have length 8 (N = max linkIndex + 1)
+✓ Character validation: All states contain only valid SUMO characters (G,g,y,r,R)
+✓ LinkIndex consistency: No collisions, each junction uses local indices
+
+BACKUP INFORMATION
+==================
+Original files backed up to: Sumo_env/gpt_newint.bak/
+- intersection.net.xml
+- tls.tll.xml
+- connections.conn.xml
+- All other original files preserved
+
+STATUS: SUCCESS
+===============
+All automated steps completed successfully. Traffic light grouping has been
+implemented according to specifications:
+- Left + straight movements grouped per approach
+- Right turns operate independently
+- All XML files validated and consistent

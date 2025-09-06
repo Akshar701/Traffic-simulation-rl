@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes>
+    <vType id="car" accel="2.6" decel="4.5" sigma="0.5" length="4.5" minGap="2.5" maxSpeed="13.9" />
+
+    <route id="N_to_S" edges="N_in C_S" /> <route id="N_to_W" edges="N_in C_W" /> <route id="N_to_E" edges="N_in C_E" />
+    <route id="S_to_N" edges="S_in C_N" /> <route id="S_to_E" edges="S_in C_E" /> <route id="S_to_W" edges="S_in C_W" />
+    <route id="E_to_W" edges="E_in C_W" /> <route id="E_to_N" edges="E_in C_N" /> <route id="E_to_S" edges="E_in C_S" />
+    <route id="W_to_E" edges="W_in C_E" /> <route id="W_to_S" edges="W_in C_S" /> <route id="W_to_N" edges="W_in C_N" />
+
+    <flow id="flow_N_left" route="N_to_W"  begin="0" end="3600" vehsPerHour="150" type="car" departLane="0" />
+    <flow id="flow_N_main1" route="N_to_S" begin="0" end="3600" vehsPerHour="600" type="car" departLane="1" />
+    <flow id="flow_N_main2" route="N_to_S" begin="0" end="3600" vehsPerHour="600" type="car" departLane="2" />
+    <flow id="flow_N_right" route="N_to_E" begin="0" end="3600" vehsPerHour="150" type="car" departLane="3" />
+
+    <flow id="flow_S_left" route="S_to_E"  begin="0" end="3600" vehsPerHour="150" type="car" departLane="0" />
+    <flow id="flow_S_main1" route="S_to_N" begin="0" end="3600" vehsPerHour="600" type="car" departLane="1" />
+    <flow id="flow_S_main2" route="S_to_N" begin="0" end="3600" vehsPerHour="600" type="car" departLane="2" />
+    <flow id="flow_S_right" route="S_to_W" begin="0" end="3600" vehsPerHour="150" type="car" departLane="3" />
+
+    <flow id="flow_E_left" route="E_to_N"  begin="0" end="3600" vehsPerHour="150" type="car" departLane="0" />
+    <flow id="flow_E_main1" route="E_to_W" begin="0" end="3600" vehsPerHour="600" type="car" departLane="1" />
+    <flow id="flow_E_main2" route="E_to_W" begin="0" end="3600" vehsPerHour="600" type="car" departLane="2" />
+    <flow id="flow_E_right" route="E_to_S" begin="0" end="3600" vehsPerHour="150" type="car" departLane="3" />
+
+    <flow id="flow_W_left" route="W_to_S"  begin="0" end="3600" vehsPerHour="150" type="car" departLane="0" />
+    <flow id="flow_W_main1" route="W_to_E" begin="0" end="3600" vehsPerHour="600" type="car" departLane="1" />
+    <flow id="flow_W_main2" route="W_to_E" begin="0" end="3600" vehsPerHour="600" type="car" departLane="2" />
+    <flow id="flow_W_right" route="W_to_N" begin="0" end="3600" vehsPerHour="150" type="car" departLane="3" />
+</routes>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<additional>
+    <tlLogic id="C" type="static" programID="my_program">
+        
+        <phase duration="30" state="GrrrGrrr" name="NS_Left_Straight"/>
+        <phase duration="4" state="yrrryrrr" name="NS_Yellow"/>
+        
+        <phase duration="30" state="rrGrrrGr" name="EW_Left_Straight"/>
+        <phase duration="4" state="rryrrryr" name="EW_Yellow"/>
+
+        <phase duration="15" state="rrrrGrrr" name="NS_Right"/>
+        <phase duration="4" state="rrrryrrr" name="NS_Right_Yellow"/>
+
+        <phase duration="15" state="rrrrrrrG" name="EW_Right"/>
+        <phase duration="4" state="rrrrrrry" name="EW_Right_Yellow"/>
+        
+    </tlLogic>
+</additional>
