@@ -337,9 +337,9 @@ def main():
             cfg.write(f"""<?xml version="1.0" encoding="UTF-8"?>
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
     <input>
-        <net-file value="cross_2lanes.net.xml"/>
+        <net-file value="intersection.net.xml"/>
         <route-files value="{os.path.basename(route_file)}"/>
-        <additional-files value="essential_detectors.xml,essential_traffic_lights.xml"/>
+        <additional-files value="tls.tll.xml"/>
     </input>
     <time>
         <begin value="0"/>

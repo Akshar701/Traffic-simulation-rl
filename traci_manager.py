@@ -55,24 +55,24 @@ class TraciManager:
         self.edge_ids = []  # Will be populated when simulation starts
         self.connection = None
         
-        # Phase definitions matching tls.tll.xml (8 phases total)
+        # Phase definitions matching gpt_newint tls.tll.xml (8 phases total)
         self.phases = {
-            0: {"name": "NS_Straight_Left", "duration": 30, "description": "North-South straight + left lanes green"},
+            0: {"name": "NS_Left_Straight", "duration": 30, "description": "North-South left + straight lanes green"},
             1: {"name": "NS_Yellow", "duration": 4, "description": "North-South yellow transition"},
-            2: {"name": "EW_Straight_Left", "duration": 30, "description": "East-West straight + left lanes green"},
+            2: {"name": "EW_Left_Straight", "duration": 30, "description": "East-West left + straight lanes green"},
             3: {"name": "EW_Yellow", "duration": 4, "description": "East-West yellow transition"},
-            4: {"name": "NS_Protected_Right", "duration": 15, "description": "North-South protected right turn"},
+            4: {"name": "NS_Right", "duration": 15, "description": "North-South right turn"},
             5: {"name": "NS_Right_Yellow", "duration": 4, "description": "North-South right turn yellow"},
-            6: {"name": "EW_Protected_Right", "duration": 15, "description": "East-West protected right turn"},
+            6: {"name": "EW_Right", "duration": 15, "description": "East-West right turn"},
             7: {"name": "EW_Right_Yellow", "duration": 4, "description": "East-West right turn yellow"}
         }
         
         # Action mapping: actions 0,1,2,3 correspond to phases 0,2,4,6 (skipping yellow phases)
         self.action_to_phase = {
-            0: 0,  # Action 0 -> Phase 0 (NS_Straight_Left)
-            1: 2,  # Action 1 -> Phase 2 (EW_Straight_Left)
-            2: 4,  # Action 2 -> Phase 4 (NS_Protected_Right)
-            3: 6   # Action 3 -> Phase 6 (EW_Protected_Right)
+            0: 0,  # Action 0 -> Phase 0 (NS_Left_Straight)
+            1: 2,  # Action 1 -> Phase 2 (EW_Left_Straight)
+            2: 4,  # Action 2 -> Phase 4 (NS_Right)
+            3: 6   # Action 3 -> Phase 6 (EW_Right)
         }
         
     def start_simulation(self, config_file: str = None) -> bool:
