@@ -36,7 +36,8 @@ class DQNNetwork(nn.Module):
     def _initialize_weights(self):
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
+                # Use Kaiming (He) initialization for ReLU networks
+                nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
                 nn.init.constant_(module.bias, 0)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -129,11 +130,8 @@ class DQNAgent:
         
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-            if self.mixed_precision:
-                with torch.cuda.amp.autocast():
-                    q_values = self.q_network(state_tensor)
-            else:
-                q_values = self.q_network(state_tensor)
+            # Mixed precision autocast is unnecessary for inference
+            q_values = self.q_network(state_tensor)
             return q_values.argmax().item()
             
     def remember(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray, done: bool):
@@ -145,7 +143,7 @@ class DQNAgent:
         
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         
-        with torch.cuda.amp.autocast(enabled=self.mixed_precision):
+        with torch.amp.autocast('cuda', enabled=self.mixed_precision):
             current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
             
             with torch.no_grad():
@@ -166,9 +164,6 @@ class DQNAgent:
         self.step_count += 1
         if self.step_count % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
-        
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
         
         loss_value = loss.item()
         self.training_losses.append(loss_value)
@@ -235,11 +230,13 @@ class DQNAgent:
             total_reward += reward
             step_rewards.append(reward)
             
-            # Note: step_count, target network update, and epsilon decay are handled in replay()
-            
             # Check if episode is done
             if done:
                 break
+        
+        # Decay epsilon once per episode for more predictable exploration schedule
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
         
         return total_reward, step + 1, step_rewards
     
