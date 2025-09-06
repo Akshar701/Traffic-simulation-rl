@@ -66,20 +66,20 @@ class TrafficGenerator:
         <vType id="moped" vClass="moped" speedDev="0.4" latAlignment="compact" probability="0.4"/>
     </vTypeDistribution>""", file=routes)
 
-            # define routes - compatible with the existing network structure
+            # define routes - compatible with gpt_newint network structure
             routes_def = {
-                "r0": "51o 1i 2o 52i",  # West to East
-                "r1": "51o 1i 4o 54i",  # West to South
-                "r2": "51o 1i 3o 53i",  # West to North
-                "r3": "54o 4i 3o 53i",  # South to North
-                "r4": "54o 4i 1o 51i",  # South to West
-                "r5": "54o 4i 2o 52i",  # South to East
-                "r6": "52o 2i 1o 51i",  # East to West
-                "r7": "52o 2i 4o 54i",  # East to South
-                "r8": "52o 2i 3o 53i",  # East to North
-                "r9": "53o 3i 4o 54i",  # North to South
-                "r10": "53o 3i 1o 51i", # North to West
-                "r11": "53o 3i 2o 52i"  # North to East
+                "r0": "W_in C_E",  # West to East
+                "r1": "W_in C_S",  # West to South
+                "r2": "W_in C_N",  # West to North
+                "r3": "S_in C_N",  # South to North
+                "r4": "S_in C_W",  # South to West
+                "r5": "S_in C_E",  # South to East
+                "r6": "E_in C_W",  # East to West
+                "r7": "E_in C_S",  # East to South
+                "r8": "E_in C_N",  # East to North
+                "r9": "N_in C_S",  # North to South
+                "r10": "N_in C_W", # North to West
+                "r11": "N_in C_E"  # North to East
             }
             
             for rid, edges in routes_def.items():
