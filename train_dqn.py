@@ -16,8 +16,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import csv
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional
+from torch.utils.tensorboard import SummaryWriter
 
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +28,7 @@ from agents.dqn_agent import DQNAgent
 from envs.traffic_env import TrafficEnv
 
 class DQNTrainer:
-    """DQN Training Manager with Adaptive Features"""
+    """DQN Training Manager with TensorBoard Integration and Formal Logging"""
     
     def __init__(self, config: Dict):
         self.config = config
@@ -37,8 +39,14 @@ class DQNTrainer:
         os.makedirs(self.results_dir, exist_ok=True)
         os.makedirs(self.models_dir, exist_ok=True)
         
-        # Print GPU information
-        self.print_gpu_info()
+        # Setup logging
+        self._setup_logging()
+        
+        # Setup TensorBoard
+        self._setup_tensorboard()
+        
+        # Log GPU information
+        self._log_gpu_info()
         
         # Initialize environment and agent
         self.env = TrafficEnv(
@@ -67,56 +75,129 @@ class DQNTrainer:
         self.training_history = []
         self.evaluation_history = []
         self.start_time = None
+        self.episode_count = 0
+        self.step_count = 0
+    
+    def _setup_logging(self):
+        """Setup formal logging framework"""
+        # Create logs directory
+        logs_dir = os.path.join(self.results_dir, 'logs')
+        os.makedirs(logs_dir, exist_ok=True)
         
-    def print_gpu_info(self):
-        """Print GPU information and optimization settings"""
-        print("🚀 GPU Configuration:")
-        print("=" * 40)
+        # Create timestamped log file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_file = os.path.join(logs_dir, f'training_{timestamp}.log')
+        
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+        
+        self.logger = logging.getLogger(__name__)
+        self.logger.info(f"🚀 Training session started - Log file: {log_file}")
+        self.logger.info("=" * 60)
+    
+    def _setup_tensorboard(self):
+        """Setup TensorBoard for experiment tracking"""
+        # Create TensorBoard logs directory
+        tb_logs_dir = os.path.join(self.results_dir, 'tensorboard_logs')
+        os.makedirs(tb_logs_dir, exist_ok=True)
+        
+        # Create timestamped run directory
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        run_dir = os.path.join(tb_logs_dir, f'run_{timestamp}')
+        
+        # Initialize TensorBoard writer
+        self.writer = SummaryWriter(log_dir=run_dir)
+        
+        # Log hyperparameters
+        self._log_hyperparameters()
+        
+        self.logger.info(f"📊 TensorBoard logging enabled - Run directory: {run_dir}")
+        self.logger.info(f"📊 To view TensorBoard: tensorboard --logdir {tb_logs_dir}")
+    
+    def _log_hyperparameters(self):
+        """Log hyperparameters to TensorBoard"""
+        hparams = {
+            'learning_rate': self.config.get('learning_rate', 1e-4),
+            'gamma': self.config.get('gamma', 0.99),
+            'epsilon': self.config.get('epsilon', 1.0),
+            'epsilon_min': self.config.get('epsilon_min', 0.01),
+            'epsilon_decay': self.config.get('epsilon_decay', 0.995),
+            'memory_size': self.config.get('memory_size', 10000),
+            'batch_size': self.config.get('batch_size', 64),
+            'target_update_freq': self.config.get('target_update_freq', 1000),
+            'hidden_size': self.config.get('hidden_size', 256),
+            'max_steps': self.config.get('max_steps', 1000),
+            'mixed_precision': self.config.get('mixed_precision', True)
+        }
+        
+        # Log hyperparameters as text
+        hparams_text = "\n".join([f"{k}: {v}" for k, v in hparams.items()])
+        self.writer.add_text('Hyperparameters', hparams_text, 0)
+        
+        self.logger.info("📋 Hyperparameters logged to TensorBoard")
+    
+    def _log_gpu_info(self):
+        """Log GPU information and optimization settings"""
+        self.logger.info("🚀 GPU Configuration:")
+        self.logger.info("=" * 40)
         
         if torch.cuda.is_available():
-            print(f"✅ CUDA Available: {torch.version.cuda}")
-            print(f"🎯 GPU Device: {torch.cuda.get_device_name(0)}")
-            print(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-            print(f"🔧 CUDA Capability: {torch.cuda.get_device_capability()}")
-            print(f"📊 GPU Count: {torch.cuda.device_count()}")
+            self.logger.info(f"✅ CUDA Available: {torch.version.cuda}")
+            self.logger.info(f"🎯 GPU Device: {torch.cuda.get_device_name(0)}")
+            self.logger.info(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            self.logger.info(f"🔧 CUDA Capability: {torch.cuda.get_device_capability()}")
+            self.logger.info(f"📊 GPU Count: {torch.cuda.device_count()}")
             
             # Memory info
             memory_allocated = torch.cuda.memory_allocated() / 1e6
             memory_reserved = torch.cuda.memory_reserved() / 1e6
-            print(f"💾 Memory Allocated: {memory_allocated:.1f} MB")
-            print(f"💾 Memory Reserved: {memory_reserved:.1f} MB")
+            self.logger.info(f"💾 Memory Allocated: {memory_allocated:.1f} MB")
+            self.logger.info(f"💾 Memory Reserved: {memory_reserved:.1f} MB")
             
             # Optimization settings
-            print(f"⚡ cuDNN Benchmark: {torch.backends.cudnn.benchmark}")
-            print(f"⚡ cuDNN Deterministic: {torch.backends.cudnn.deterministic}")
+            self.logger.info(f"⚡ cuDNN Benchmark: {torch.backends.cudnn.benchmark}")
+            self.logger.info(f"⚡ cuDNN Deterministic: {torch.backends.cudnn.deterministic}")
+            
+            # Log GPU info to TensorBoard
+            self.writer.add_text('System/GPU_Device', torch.cuda.get_device_name(0), 0)
+            self.writer.add_text('System/CUDA_Version', torch.version.cuda, 0)
+            self.writer.add_scalar('System/GPU_Memory_GB', torch.cuda.get_device_properties(0).total_memory / 1e9, 0)
             
         else:
-            print("⚠️ CUDA not available - using CPU")
-            print("💡 For optimal performance, install CUDA-enabled PyTorch")
+            self.logger.warning("⚠️ CUDA not available - using CPU")
+            self.logger.info("💡 For optimal performance, install CUDA-enabled PyTorch")
+            self.writer.add_text('System/Device', 'CPU', 0)
         
-        print("=" * 40)
+        self.logger.info("=" * 40)
         
-    def print_training_header(self, episodes: int, eval_freq: int, save_freq: int):
-        """Print training header with configuration"""
-        print("🚦" + "="*60)
-        print("🚀 ADAPTIVE DQN TRAINING FOR TRAFFIC SIGNAL CONTROL")
-        print("="*60)
-        print(f"📊 Training Configuration:")
-        print(f"   • Episodes: {episodes}")
-        print(f"   • Evaluation Frequency: Every {eval_freq} episodes")
-        print(f"   • Model Save Frequency: Every {save_freq} episodes")
-        print(f"   • Max Steps per Episode: {self.config.get('max_steps', 1000)}")
-        print(f"   • Learning Rate: {self.config.get('learning_rate', 1e-4)}")
-        print(f"   • Initial Epsilon: {self.config.get('epsilon', 1.0)}")
-        print(f"   • Target Network Update: Every {self.config.get('target_update_freq', 1000)} steps")
-        print(f"   • Mixed Precision: {self.config.get('mixed_precision', True)}")
-        print(f"   • Performance Window: {self.config.get('performance_window', 50)} episodes")
-        print("="*60)
+    def _log_training_header(self, episodes: int, eval_freq: int, save_freq: int):
+        """Log training header with configuration"""
+        self.logger.info("🚦" + "="*60)
+        self.logger.info("🚀 ADAPTIVE DQN TRAINING FOR TRAFFIC SIGNAL CONTROL")
+        self.logger.info("="*60)
+        self.logger.info(f"📊 Training Configuration:")
+        self.logger.info(f"   • Episodes: {episodes}")
+        self.logger.info(f"   • Evaluation Frequency: Every {eval_freq} episodes")
+        self.logger.info(f"   • Model Save Frequency: Every {save_freq} episodes")
+        self.logger.info(f"   • Max Steps per Episode: {self.config.get('max_steps', 1000)}")
+        self.logger.info(f"   • Learning Rate: {self.config.get('learning_rate', 1e-4)}")
+        self.logger.info(f"   • Initial Epsilon: {self.config.get('epsilon', 1.0)}")
+        self.logger.info(f"   • Target Network Update: Every {self.config.get('target_update_freq', 1000)} steps")
+        self.logger.info(f"   • Mixed Precision: {self.config.get('mixed_precision', True)}")
+        self.logger.info(f"   • Performance Window: {self.config.get('performance_window', 50)} episodes")
+        self.logger.info("="*60)
         
-    def print_episode_progress(self, episode: int, total_reward: float, steps: int, 
+    def _log_episode_progress(self, episode: int, total_reward: float, steps: int, 
                               epsilon: float, recent_rewards: List[float], 
                               training_loss: Optional[float] = None):
-        """Print detailed episode progress with adaptive features"""
+        """Log detailed episode progress with TensorBoard integration"""
         # Calculate performance metrics
         avg_reward = np.mean(recent_rewards) if recent_rewards else 0
         reward_trend = "↗️" if len(recent_rewards) >= 2 and recent_rewards[-1] > recent_rewards[-2] else "↘️"
@@ -137,19 +218,26 @@ class DQNTrainer:
             memory_mb = torch.cuda.memory_allocated() / 1e6
             gpu_memory = f" | 🚀 GPU: {memory_mb:.1f}MB"
         
-        # Get basic training info
-        training_info = ""
+        # Log episode summary
+        self.logger.info(f"Episode {episode:4d} | {performance}")
+        self.logger.info(f"   📈 Reward: {total_reward:7.2f} {reward_trend}")
+        self.logger.info(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}{gpu_memory}")
+        self.logger.info(f"   📊 Avg (10): {avg_reward:7.2f}")
         
-        # Print episode summary
-        print(f"Episode {episode:4d} | {performance}")
-        print(f"   📈 Reward: {total_reward:7.2f} {reward_trend}")
-        print(f"   ⏱️  Steps: {steps:3d} | 🎯 Epsilon: {epsilon:.3f}{gpu_memory}")
-        print(f"   📊 Avg (10): {avg_reward:7.2f}")
+        # Log to TensorBoard
+        self.writer.add_scalar('Training/Episode_Reward', total_reward, episode)
+        self.writer.add_scalar('Training/Average_Reward_10', avg_reward, episode)
+        self.writer.add_scalar('Training/Episode_Steps', steps, episode)
+        self.writer.add_scalar('Training/Epsilon', epsilon, episode)
+        
+        if torch.cuda.is_available():
+            self.writer.add_scalar('System/GPU_Memory_MB', torch.cuda.memory_allocated() / 1e6, episode)
         
         if training_loss is not None:
-            print(f"   🧠 Loss: {training_loss:.6f}")
+            self.logger.info(f"   🧠 Loss: {training_loss:.6f}")
+            self.writer.add_scalar('Training/Loss', training_loss, episode)
         
-        # Print action distribution if available
+        # Log action distribution if available
         if hasattr(self.agent, 'recent_actions') and self.agent.recent_actions:
             action_counts = {}
             for action in self.agent.recent_actions[-steps:]:
@@ -160,13 +248,15 @@ class DQNTrainer:
                 count = action_counts.get(i, 0)
                 percentage = (count / steps) * 100 if steps > 0 else 0
                 action_dist.append(f"Action {i}: {percentage:.1f}%")
+                # Log individual action percentages to TensorBoard
+                self.writer.add_scalar(f'Training/Action_{i}_Percentage', percentage, episode)
             
-            print(f"   🚦 Actions: {' | '.join(action_dist)}")
+            self.logger.info(f"   🚦 Actions: {' | '.join(action_dist)}")
         
-        print("-" * 60)
+        self.logger.info("-" * 60)
         
-    def print_evaluation_results(self, episode: int, eval_results: Dict):
-        """Print evaluation results in a user-friendly format"""
+    def _log_evaluation_results(self, episode: int, eval_results: Dict):
+        """Log evaluation results with TensorBoard integration"""
         mean_reward = eval_results['mean_reward']
         std_reward = eval_results['std_reward']
         mean_steps = eval_results['mean_steps']
@@ -181,10 +271,23 @@ class DQNTrainer:
         else:
             eval_performance = "🔴 POOR"
         
-        print(f"📊 EVALUATION at Episode {episode} | {eval_performance}")
-        print(f"   🎯 Mean Reward: {mean_reward:7.2f} ± {std_reward:.2f}")
-        print(f"   ⏱️  Mean Steps: {mean_steps:.1f}")
-        print(f"   📈 Individual Episodes: {eval_results['episode_rewards']}")
+        self.logger.info(f"📊 EVALUATION at Episode {episode} | {eval_performance}")
+        self.logger.info(f"   🎯 Mean Reward: {mean_reward:7.2f} ± {std_reward:.2f}")
+        self.logger.info(f"   ⏱️  Mean Steps: {mean_steps:.1f}")
+        self.logger.info(f"   📈 Individual Episodes: {eval_results['episode_rewards']}")
+        
+        # Log to TensorBoard
+        self.writer.add_scalar('Evaluation/Mean_Reward', mean_reward, episode)
+        self.writer.add_scalar('Evaluation/Std_Reward', std_reward, episode)
+        self.writer.add_scalar('Evaluation/Mean_Steps', mean_steps, episode)
+        
+        # Log additional metrics if available
+        if 'mean_waiting_time' in eval_results:
+            self.writer.add_scalar('Evaluation/Mean_Waiting_Time', eval_results['mean_waiting_time'], episode)
+        if 'mean_queue_length' in eval_results:
+            self.writer.add_scalar('Evaluation/Mean_Queue_Length', eval_results['mean_queue_length'], episode)
+        if 'mean_speed' in eval_results:
+            self.writer.add_scalar('Evaluation/Mean_Speed', eval_results['mean_speed'], episode)
         
         # Print adaptive hyperparameter info
         if hasattr(self.agent, 'get_adaptive_stats'):
@@ -234,17 +337,17 @@ class DQNTrainer:
         """
         Train the DQN agent with enhanced user feedback and adaptive features
         """
-        self.print_training_header(episodes, eval_freq, save_freq)
+        self._log_training_header(episodes, eval_freq, save_freq)
         
         self.start_time = time.time()
         recent_rewards = []
         
-        print("🚀 Starting training...")
-        print("💡 The agent will start with random exploration (epsilon = 1.0)")
-        print("💡 As training progresses, it will learn and reduce exploration")
-        print("💡 Watch for improving rewards and more consistent performance")
-        print("🎯 Adaptive hyperparameters will automatically adjust based on performance")
-        print("-" * 60)
+        self.logger.info("🚀 Starting training...")
+        self.logger.info("💡 The agent will start with random exploration (epsilon = 1.0)")
+        self.logger.info("💡 As training progresses, it will learn and reduce exploration")
+        self.logger.info("💡 Watch for improving rewards and more consistent performance")
+        self.logger.info("🎯 Adaptive hyperparameters will automatically adjust based on performance")
+        self.logger.info("-" * 60)
         
         for episode in range(episodes):
             # Train one episode
@@ -279,15 +382,15 @@ class DQNTrainer:
             if self.agent.training_losses:
                 recent_loss = self.agent.training_losses[-1] if self.agent.training_losses else None
             
-            # Print progress every episode for better visibility
-            self.print_episode_progress(
+            # Log progress every episode for better visibility
+            self._log_episode_progress(
                 episode + 1, total_reward, steps, self.agent.epsilon, 
                 recent_rewards[-10:], recent_loss
             )
             
             # Evaluate periodically
             if (episode + 1) % eval_freq == 0:
-                print(f"🔍 Running evaluation...")
+                self.logger.info(f"🔍 Running evaluation...")
                 eval_results = self.evaluate(episodes=5)
                 self.evaluation_history.append({
                     'episode': episode + 1,
@@ -295,7 +398,7 @@ class DQNTrainer:
                     'timestamp': datetime.now().isoformat()
                 })
                 
-                self.print_evaluation_results(episode + 1, eval_results)
+                self._log_evaluation_results(episode + 1, eval_results)
             
             # Save model periodically
             if (episode + 1) % save_freq == 0:
@@ -314,20 +417,27 @@ class DQNTrainer:
         # Save training results
         self.save_training_results()
         
+        # Close TensorBoard writer
+        self.writer.close()
+        self.logger.info("📊 TensorBoard writer closed")
+        
         return self.training_history
     
     def evaluate(self, episodes: int = 5) -> Dict:
         """Evaluate the current agent"""
-        print(f"🔍 Evaluating agent over {episodes} episodes...")
+        self.logger.info(f"🔍 Evaluating agent over {episodes} episodes...")
         eval_results = self.agent.evaluate(self.env, episodes=episodes)
         return eval_results
     
     def save_training_results(self):
         """Save training results and plots with adaptive features"""
+        self.logger.info("💾 Saving training results...")
+        
         # Save training history as JSON
         history_path = os.path.join(self.results_dir, 'training_history.json')
         with open(history_path, 'w') as f:
             json.dump(self.training_history, f, indent=2)
+        self.logger.info(f"📄 Training history saved to: {history_path}")
         
         # Save training history as CSV for easy analysis
         csv_path = os.path.join(self.results_dir, 'training_history.csv')
@@ -336,11 +446,13 @@ class DQNTrainer:
                 writer = csv.DictWriter(f, fieldnames=self.training_history[0].keys())
                 writer.writeheader()
                 writer.writerows(self.training_history)
+        self.logger.info(f"📊 Training history CSV saved to: {csv_path}")
         
         # Save evaluation history as JSON
         eval_path = os.path.join(self.results_dir, 'evaluation_history.json')
         with open(eval_path, 'w') as f:
             json.dump(self.evaluation_history, f, indent=2)
+        self.logger.info(f"📄 Evaluation history saved to: {eval_path}")
         
         # Save evaluation history as CSV
         eval_csv_path = os.path.join(self.results_dir, 'evaluation_history.csv')

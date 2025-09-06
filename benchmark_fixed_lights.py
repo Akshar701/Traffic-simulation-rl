@@ -27,7 +27,7 @@ from datetime import datetime
 from collections import defaultdict
 import subprocess
 import traci
-import traci.constants as tc
+# import traci.constants as tc  # Not needed after removing getContext call
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing as mp
@@ -165,13 +165,15 @@ class TrafficLightBenchmarker:
         )
         
         for scenario in self.scenarios:
-            # Generate with noise for realistic variability
-            route_file = generator.generate(
-                seed=42,  # Fixed seed for reproducibility
-                scenario=scenario,
-                add_noise=True
-            )
-            print(f"  ✅ {scenario}: {route_file}")
+            # Generate with different seeds for each run to create variability
+            for run in range(self.num_runs):
+                route_file = generator.generate(
+                    seed=42 + run,  # Different seed for each run
+                    scenario=scenario,
+                    add_noise=True,
+                    run_id=run  # Create unique files per run
+                )
+                print(f"  ✅ {scenario} run {run}: {route_file}")
     
     def _run_single_simulation(self, scenario, run_id):
         """Run a single simulation and collect metrics"""
@@ -195,6 +197,7 @@ class TrafficLightBenchmarker:
             
             # Initialize metrics collection
             metrics = {
+                'commute_times': defaultdict(list),  # Primary metric for 10% improvement
                 'travel_times': defaultdict(list),
                 'waiting_times': defaultdict(list),
                 'speeds': defaultdict(list),
@@ -267,8 +270,8 @@ class TrafficLightBenchmarker:
         # Get absolute paths
         project_root = os.path.dirname(os.path.abspath(__file__))
         net_file = os.path.join(project_root, "Sumo_env", "gpt_newint", "intersection.net.xml")
-        # Use relative path for route file since config is in same directory
-        route_file = f"{scenario}_episode_routes.rou.xml"
+        # Use run-specific route file since each run has different traffic
+        route_file = f"{scenario}_run_{run_id}_episode_routes.rou.xml"
         
         config_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
@@ -311,7 +314,15 @@ class TrafficLightBenchmarker:
                 if route_id not in self.route_mapping:
                     continue
                 
-                # Travel time (total time in simulation)
+                # Commute time (total time from departure to arrival - key metric for 10% improvement)
+                try:
+                    depart_time = traci.vehicle.getDeparture(vehicle_id)
+                    current_time = traci.simulation.getTime()
+                    commute_time = current_time - depart_time
+                except:
+                    commute_time = traci.vehicle.getTimeLoss(vehicle_id)  # Fallback
+                
+                # Travel time (time loss due to traffic conditions)
                 travel_time = traci.vehicle.getTimeLoss(vehicle_id)
                 
                 # Waiting time (time spent waiting at traffic lights)
@@ -328,6 +339,7 @@ class TrafficLightBenchmarker:
                 co2_emission = traci.vehicle.getCO2Emission(vehicle_id)
                 
                 # Store metrics
+                metrics['commute_times'][route_id].append(commute_time)
                 metrics['travel_times'][route_id].append(travel_time)
                 metrics['waiting_times'][route_id].append(waiting_time)
                 metrics['speeds'][route_id].append(speed)
@@ -351,30 +363,38 @@ class TrafficLightBenchmarker:
             arrived_vehicles = traci.simulation.getArrivedIDList()
             for vehicle_id in arrived_vehicles:
                 try:
-                    route_id = traci.vehicle.getRouteID(vehicle_id)
+                    # Get route ID from vehicle ID (format: route_id_vehicle_number)
+                    # Extract route ID from vehicle ID
+                    route_id = vehicle_id.split('_')[0]  # e.g., "r0_123" -> "r0"
                     if route_id in self.route_mapping:
                         metrics['completed_vehicles'][route_id] += 1
-                except traci.exceptions.TraCIException:
-                    # Vehicle already removed from simulation
+                except (traci.exceptions.TraCIException, IndexError):
+                    # Vehicle ID format unexpected or other error
                     continue
         except traci.exceptions.TraCIException:
             # No arrived vehicles this step
             pass
         
-        # Collect queue lengths for each lane
+        # Collect queue lengths for each lane and map to approaches
         for lane_id in traci.lane.getIDList():
             if 'C_' in lane_id:  # Only intersection lanes
                 queue_length = traci.lane.getLastStepHaltingNumber(lane_id)
                 metrics['queue_lengths'][lane_id].append(queue_length)
+                
+                # Map lanes to their approach directions for route-based analysis
+                # Extract approach direction from lane ID (e.g., "C_E_0" -> "E")
+                if '_' in lane_id:
+                    approach = lane_id.split('_')[1]  # e.g., "C_E_0" -> "E"
+                    if approach in ['N', 'S', 'E', 'W']:
+                        if 'approach_queues' not in metrics:
+                            metrics['approach_queues'] = defaultdict(list)
+                        metrics['approach_queues'][approach].append(queue_length)
         
         # Collect junction efficiency metrics
         for junction_id in traci.junction.getIDList():
             if junction_id == 'C':  # Main intersection
                 try:
-                    # Get junction statistics
-                    junction_data = traci.junction.getContext(junction_id, tc.VAR_POSITION)
-                    
-                    # Calculate efficiency metrics
+                    # Calculate efficiency metrics without using getContext
                     total_vehicles = len(traci.vehicle.getIDList())
                     waiting_vehicles = sum(1 for vid in traci.vehicle.getIDList() 
                                          if traci.vehicle.getWaitingTime(vid) > 0)
@@ -398,16 +418,28 @@ class TrafficLightBenchmarker:
         # Process metrics for each route
         for route_id, route_name in self.route_mapping.items():
             if route_id in metrics['travel_times']:
+                # Map route to its approach direction for queue analysis
+                route_to_approach = {
+                    'r0': 'W', 'r1': 'W', 'r2': 'W',  # West approaches
+                    'r3': 'S', 'r4': 'S', 'r5': 'S',  # South approaches  
+                    'r6': 'E', 'r7': 'E', 'r8': 'E',  # East approaches
+                    'r9': 'N', 'r10': 'N', 'r11': 'N' # North approaches
+                }
+                
+                approach = route_to_approach.get(route_id, '')
+                approach_queues = metrics.get('approach_queues', {}).get(approach, [])
+                
                 route_metrics = {
                     'route_name': route_name,
+                    'avg_commute_time': np.mean(metrics['commute_times'][route_id]) if metrics['commute_times'][route_id] else 0,  # Primary metric
                     'avg_travel_time': np.mean(metrics['travel_times'][route_id]) if metrics['travel_times'][route_id] else 0,
                     'total_waiting_time': np.sum(metrics['waiting_times'][route_id]) if metrics['waiting_times'][route_id] else 0,
                     'avg_speed': np.mean(metrics['speeds'][route_id]) if metrics['speeds'][route_id] else 0,
                     'avg_delay': np.mean(metrics['delays'][route_id]) if metrics['delays'][route_id] else 0,
                     'throughput': metrics['completed_vehicles'][route_id],
                     'vehicle_count': metrics['vehicle_counts'][route_id],
-                    'max_queue_length': max(metrics['queue_lengths'].get(route_id, [0])) if metrics['queue_lengths'].get(route_id) else 0,
-                    'avg_queue_length': np.mean(metrics['queue_lengths'].get(route_id, [0])) if metrics['queue_lengths'].get(route_id) else 0
+                    'max_queue_length': max(approach_queues) if approach_queues else 0,
+                    'avg_queue_length': np.mean(approach_queues) if approach_queues else 0
                 }
                 
                 # Add fuel and emissions data
@@ -425,6 +457,7 @@ class TrafficLightBenchmarker:
                 processed['routes'][route_id] = route_metrics
         
         # Overall metrics
+        all_commute_times = []  # Primary metric for 10% improvement
         all_travel_times = []
         all_waiting_times = []
         all_speeds = []
@@ -436,6 +469,7 @@ class TrafficLightBenchmarker:
         all_efficiency = []
         
         for route_metrics in processed['routes'].values():
+            all_commute_times.append(route_metrics['avg_commute_time'])  # Primary metric
             all_travel_times.append(route_metrics['avg_travel_time'])
             all_waiting_times.append(route_metrics['total_waiting_time'])
             all_speeds.append(route_metrics['avg_speed'])
@@ -450,6 +484,7 @@ class TrafficLightBenchmarker:
             all_efficiency.extend(efficiency_values)
         
         processed['overall'] = {
+            'avg_commute_time': np.mean(all_commute_times) if all_commute_times else 0,  # Primary metric for 10% improvement
             'avg_travel_time': np.mean(all_travel_times) if all_travel_times else 0,
             'total_waiting_time': np.sum(all_waiting_times) if all_waiting_times else 0,
             'avg_speed': np.mean(all_speeds) if all_speeds else 0,
@@ -469,6 +504,7 @@ class TrafficLightBenchmarker:
         
         # Extract metrics across all runs
         metrics_by_run = {
+            'avg_commute_time': [run['overall']['avg_commute_time'] for run in run_results],  # Primary metric
             'avg_travel_time': [run['overall']['avg_travel_time'] for run in run_results],
             'total_waiting_time': [run['overall']['total_waiting_time'] for run in run_results],
             'avg_speed': [run['overall']['avg_speed'] for run in run_results],
@@ -490,7 +526,7 @@ class TrafficLightBenchmarker:
         route_stats = {}
         for route_id in self.route_mapping.keys():
             route_metrics = {}
-            for metric in ['avg_travel_time', 'total_waiting_time', 'avg_speed', 'avg_delay', 'throughput']:
+            for metric in ['avg_commute_time', 'avg_travel_time', 'total_waiting_time', 'avg_speed', 'avg_delay', 'throughput', 'max_queue_length', 'avg_queue_length']:
                 values = []
                 for run in run_results:
                     if route_id in run['routes']:
@@ -524,6 +560,8 @@ class TrafficLightBenchmarker:
             summary_data.append({
                 'scenario': scenario,
                 'num_runs': stats['num_runs'],
+                'avg_commute_time_mean': stats['avg_commute_time_mean'],  # Primary metric for 10% improvement
+                'avg_commute_time_std': stats['avg_commute_time_std'],
                 'avg_travel_time_mean': stats['avg_travel_time_mean'],
                 'avg_travel_time_std': stats['avg_travel_time_std'],
                 'total_waiting_time_mean': stats['total_waiting_time_mean'],
@@ -548,12 +586,16 @@ class TrafficLightBenchmarker:
                     'scenario': scenario,
                     'route_id': route_id,
                     'route_name': route_name,
+                    'avg_commute_time_mean': route_stats.get('avg_commute_time_mean', 0),  # Primary metric
+                    'avg_commute_time_std': route_stats.get('avg_commute_time_std', 0),
                     'avg_travel_time_mean': route_stats.get('avg_travel_time_mean', 0),
                     'avg_travel_time_std': route_stats.get('avg_travel_time_std', 0),
                     'total_waiting_time_mean': route_stats.get('total_waiting_time_mean', 0),
                     'avg_speed_mean': route_stats.get('avg_speed_mean', 0),
                     'avg_delay_mean': route_stats.get('avg_delay_mean', 0),
-                    'throughput_mean': route_stats.get('throughput_mean', 0)
+                    'throughput_mean': route_stats.get('throughput_mean', 0),
+                    'max_queue_length_mean': route_stats.get('max_queue_length_mean', 0),
+                    'avg_queue_length_mean': route_stats.get('avg_queue_length_mean', 0)
                 })
         
         df_routes = pd.DataFrame(route_data)

@@ -121,6 +121,7 @@ class DQNAgent:
         self.memory = ExperienceReplay(memory_size, self.device)
         
         self.step_count = 0
+        self.training_losses = []  # Track training losses
     
     def act(self, state: np.ndarray) -> int:
         if random.random() < self.epsilon:
@@ -168,8 +169,11 @@ class DQNAgent:
         
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+        
+        loss_value = loss.item()
+        self.training_losses.append(loss_value)
             
-        return loss.item()
+        return loss_value
 
     def save(self, filepath: str):
         """Save the agent model and training state."""
@@ -197,3 +201,94 @@ class DQNAgent:
         
         print(f"✅ Agent loaded from: {filepath}")
         print(f"📊 Resuming from step {self.step_count}, epsilon: {self.epsilon:.3f}")
+    
+    def train_episode(self, env, max_steps: int = 1000):
+        """
+        Train the agent for one episode
+        
+        Args:
+            env: The environment to train on
+            max_steps: Maximum steps per episode
+            
+        Returns:
+            Tuple of (total_reward, steps, step_rewards)
+        """
+        state = env.reset()
+        total_reward = 0
+        step_rewards = []
+        
+        for step in range(max_steps):
+            # Choose action
+            action = self.act(state)
+            
+            # Take action
+            next_state, reward, done, info = env.step(action)
+            
+            # Store experience
+            self.remember(state, action, reward, next_state, done)
+            
+            # Train the agent
+            loss = self.replay()
+            
+            # Update state and reward
+            state = next_state
+            total_reward += reward
+            step_rewards.append(reward)
+            
+            # Note: step_count, target network update, and epsilon decay are handled in replay()
+            
+            # Check if episode is done
+            if done:
+                break
+        
+        return total_reward, step + 1, step_rewards
+    
+    def evaluate(self, env, episodes: int = 5):
+        """
+        Evaluate the agent over multiple episodes
+        
+        Args:
+            env: The environment to evaluate on
+            episodes: Number of episodes to evaluate
+            
+        Returns:
+            Dictionary with evaluation results
+        """
+        episode_rewards = []
+        episode_steps = []
+        
+        # Save current epsilon and set to 0 for evaluation
+        original_epsilon = self.epsilon
+        self.epsilon = 0.0
+        
+        try:
+            for episode in range(episodes):
+                state = env.reset()
+                total_reward = 0
+                steps = 0
+                
+                for step in range(1000):  # Max steps for evaluation
+                    action = self.act(state)
+                    next_state, reward, done, info = env.step(action)
+                    
+                    state = next_state
+                    total_reward += reward
+                    steps += 1
+                    
+                    if done:
+                        break
+                
+                episode_rewards.append(total_reward)
+                episode_steps.append(steps)
+        
+        finally:
+            # Restore original epsilon
+            self.epsilon = original_epsilon
+        
+        return {
+            'mean_reward': np.mean(episode_rewards),
+            'std_reward': np.std(episode_rewards),
+            'mean_steps': np.mean(episode_steps),
+            'episode_rewards': episode_rewards,
+            'episode_steps': episode_steps
+        }

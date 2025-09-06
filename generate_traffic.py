@@ -42,23 +42,39 @@ class TrafficGenerator:
             car_gen_steps.append(step)
         return car_gen_steps
 
-    def generate(self, seed, scenario=None, add_noise=True):
+    def generate(self, seed, scenario=None, add_noise=True, run_id=None):
         """
         Generate route file for a given scenario:
         - uniform: balanced traffic from all directions
         - tidal: heavy E-W, light N-S
         - asymmetric: heavy North+East, light South+West
+        - congested: high traffic density for congestion testing
         
         If scenario is None, randomly sample one with equal probability.
         If add_noise is True, add random scaling to route weights for variability.
+        If run_id is provided, include it in filename for unique files per run.
         """
         # Balanced scenario sampling
         if scenario is None:
             scenario = random.choice(["uniform", "tidal", "asymmetric", "congested"])
         
         self.current_scenario = scenario
-        car_gen_steps = self._generate_depart_times(seed)
-        filename = os.path.join(self._out_dir, f"{scenario}_episode_routes.rou.xml")
+        
+        # Adjust vehicle count based on scenario
+        if scenario == "congested":
+            # Generate more vehicles for congested scenario
+            original_cars = self._n_cars_generated
+            self._n_cars_generated = int(self._n_cars_generated * 1.5)  # 50% more vehicles
+            car_gen_steps = self._generate_depart_times(seed)
+            self._n_cars_generated = original_cars  # Restore original value
+        else:
+            car_gen_steps = self._generate_depart_times(seed)
+        
+        # Create unique filename for each run
+        if run_id is not None:
+            filename = os.path.join(self._out_dir, f"{scenario}_run_{run_id}_episode_routes.rou.xml")
+        else:
+            filename = os.path.join(self._out_dir, f"{scenario}_episode_routes.rou.xml")
 
         with open(filename, "w") as routes:
             # vehicle types - compatible with the existing environment
@@ -105,8 +121,8 @@ class TrafficGenerator:
                 # Heavy North+East traffic (more extreme for RL challenges)
                 route_weights = [0.1, 0.1, 0.4, 0.4, 0.1, 0.1, 0.4, 0.1, 0.4, 0.4, 0.1, 0.4]
             elif scenario == "congested":
-                # High congestion scenario for RL training
-                route_weights = [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
+                # High congestion scenario - higher overall traffic density
+                route_weights = [1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
             else:
                 route_weights = [1.0] * 12
 
