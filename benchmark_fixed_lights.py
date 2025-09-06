@@ -264,11 +264,17 @@ class TrafficLightBenchmarker:
     
     def _create_sumo_config(self, scenario, run_id):
         """Create SUMO configuration file for the simulation"""
+        # Get absolute paths
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        net_file = os.path.join(project_root, "Sumo_env", "gpt_newint", "intersection.net.xml")
+        # Use relative path for route file since config is in same directory
+        route_file = f"{scenario}_episode_routes.rou.xml"
+        
         config_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
     <input>
-        <net-file value="Sumo_env/gpt_newint/intersection.net.xml"/>
-        <route-files value="{self.output_dir}/{scenario}_episode_routes.rou.xml"/>
+        <net-file value="{net_file}"/>
+        <route-files value="{route_file}"/>
     </input>
     <time>
         <begin value="0"/>

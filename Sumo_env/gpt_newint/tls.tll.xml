@@ -34,9 +34,9 @@
         <phase duration="4"  state="yyyrrrrryyyrrrrr" name="NS_Yellow"/>
         <phase duration="30" state="rrrrGGGrrrrrGGGr" name="EW_Left_Straight"/>
         <phase duration="4"  state="rrrryyyrrrrryyyr" name="EW_Yellow"/>
-        <phase duration="15" state="rrrGrrrrrrrGrrrr" name="NS_Right"/>
+        <phase duration="25" state="rrrGrrrrrrrGrrrr" name="NS_Right"/>
         <phase duration="4"  state="rrryrrrrrrryrrrr" name="NS_Right_Yellow"/>
-        <phase duration="15" state="rrrrrrrGrrrrrrrG" name="EW_Right"/>
+        <phase duration="25" state="rrrrrrrGrrrrrrrG" name="EW_Right"/>
         <phase duration="4"  state="rrrrrrryrrrrrrry" name="EW_Right_Yellow"/>
     </tlLogic>
 </additional>

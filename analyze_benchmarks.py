@@ -46,12 +46,25 @@ class BenchmarkAnalyzer:
         with open(self.results_file, 'r') as f:
             self.results = json.load(f)
         
-        self.summary_df = pd.read_csv(self.summary_file)
-        self.routes_df = pd.read_csv(self.routes_file)
+        # Check if summary file exists and has content
+        if os.path.exists(self.summary_file) and os.path.getsize(self.summary_file) > 0:
+            self.summary_df = pd.read_csv(self.summary_file)
+        else:
+            print("⚠️  No summary data available - all runs may have failed")
+            self.summary_df = pd.DataFrame()
+        
+        # Check if routes file exists and has content
+        if os.path.exists(self.routes_file) and os.path.getsize(self.routes_file) > 0:
+            self.routes_df = pd.read_csv(self.routes_file)
+        else:
+            print("⚠️  No route data available - all runs may have failed")
+            self.routes_df = pd.DataFrame()
         
         print(f"✅ Loaded results for {len(self.results)} scenarios")
-        print(f"✅ Summary data: {len(self.summary_df)} rows")
-        print(f"✅ Route data: {len(self.routes_df)} rows")
+        if not self.summary_df.empty:
+            print(f"✅ Summary data: {len(self.summary_df)} rows")
+        if not self.routes_df.empty:
+            print(f"✅ Route data: {len(self.routes_df)} rows")
     
     def create_summary_plots(self):
         """Create summary comparison plots"""
@@ -301,24 +314,34 @@ class BenchmarkAnalyzer:
         # Load results
         self.load_results()
         
-        # Create visualizations
-        print("📈 Creating summary comparison plots...")
-        self.create_summary_plots()
+        # Check if we have any data to analyze
+        if self.summary_df.empty and self.routes_df.empty:
+            print("❌ No data available for analysis - all benchmark runs failed")
+            print("   Check benchmark.log for details about failures")
+            return
         
-        print("🗺️  Creating route analysis...")
-        self.create_route_analysis()
+        # Create visualizations only if we have data
+        if not self.summary_df.empty:
+            print("📈 Creating summary comparison plots...")
+            self.create_summary_plots()
+            
+            print("📊 Creating scenario comparison...")
+            self.create_scenario_comparison()
         
-        print("📊 Creating scenario comparison...")
-        self.create_scenario_comparison()
+        if not self.routes_df.empty:
+            print("🗺️  Creating route analysis...")
+            self.create_route_analysis()
         
         print("💡 Generating insights report...")
         self.generate_insights_report()
         
         print("✅ Analysis complete!")
         print(f"📁 Results saved to: {self.results_dir}/")
-        print("   - summary_comparison.png")
-        print("   - route_analysis.png") 
-        print("   - scenario_comparison.png")
+        if not self.summary_df.empty:
+            print("   - summary_comparison.png")
+            print("   - scenario_comparison.png")
+        if not self.routes_df.empty:
+            print("   - route_analysis.png")
         print("   - INSIGHTS_REPORT.md")
 
 

@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "episode": 0,
+  "scenario": "uniform",
+  "metrics": {
+    "episode": 0,
+    "scenario": "uniform",
+    "total_vehicles": 1200,
+    "simulation_duration": 1500,
+    "status": "basic_metrics",
+    "tripinfo_available": false,
+    "efficiency_score": 80.0,
+    "congestion_level": "high"
+  },
+  "timestamp": "2025-09-06T23:33:46.683528"
+}
