@@ -64,8 +64,16 @@ class TrafficGenerator:
             # vehicle types - compatible with the existing environment
             print("""<routes>
     <vTypeDistribution id="mixed">
-        <vType id="car" vClass="passenger" speedDev="0.2" latAlignment="compact" probability="0.6"/>
-        <vType id="moped" vClass="moped" speedDev="0.4" latAlignment="compact" probability="0.4"/>
+        <vType id="car" vClass="passenger" speedDev="0.2" latAlignment="center" probability="0.6"
+               lcStrategic="1.0" lcCooperative="1.0" lcSpeedGain="1.0" lcKeepRight="1.0"
+               lcLookaheadLeft="2.0" lcLookaheadRight="2.0" lcSpeedGainRight="0.1"
+               lcPushy="0.0" lcPushyGap="0.0" lcAssertive="1.0" lcImpatience="0.0"
+               lcTimeToImpatience="1.0" lcAccelLat="1.0" lcMaxSpeedLat="1.0"/>
+        <vType id="moped" vClass="moped" speedDev="0.4" latAlignment="center" probability="0.4"
+               lcStrategic="1.0" lcCooperative="1.0" lcSpeedGain="1.0" lcKeepRight="1.0"
+               lcLookaheadLeft="2.0" lcLookaheadRight="2.0" lcSpeedGainRight="0.1"
+               lcPushy="0.0" lcPushyGap="0.0" lcAssertive="1.0" lcImpatience="0.0"
+               lcTimeToImpatience="1.0" lcAccelLat="1.0" lcMaxSpeedLat="1.0"/>
     </vTypeDistribution>""", file=routes)
 
             # define routes - compatible with gpt_newint network structure
@@ -106,10 +114,28 @@ class TrafficGenerator:
             if add_noise:
                 route_weights = [w * np.random.uniform(0.8, 1.2) for w in route_weights]
             
+            # Lane mapping for proper lane usage (prevents last-minute lane changes)
+            # Each route should use the appropriate lane for its movement type
+            lane_mapping = {
+                "r0": "0",   # W→E (right turn from rightmost lane)
+                "r1": "1",   # W→S (straight from middle lane)
+                "r2": "2",   # W→N (straight from middle lane)
+                "r3": "0",   # S→N (right turn from rightmost lane)
+                "r4": "1",   # S→W (straight from middle lane)
+                "r5": "2",   # S→E (straight from middle lane)
+                "r6": "0",   # E→W (right turn from rightmost lane)
+                "r7": "1",   # E→S (straight from middle lane)
+                "r8": "2",   # E→N (straight from middle lane)
+                "r9": "0",   # N→S (right turn from rightmost lane)
+                "r10": "1",  # N→W (straight from middle lane)
+                "r11": "2"   # N→E (straight from middle lane)
+            }
+            
             # Generate vehicles
             for i, step in enumerate(car_gen_steps):
                 route = random.choices(list(routes_def.keys()), weights=route_weights, k=1)[0]
-                print(f'    <vehicle id="{route}_{i}" type="mixed" route="{route}" depart="{step}" departPos="random_free"/>', file=routes)
+                lane = lane_mapping[route]
+                print(f'    <vehicle id="{route}_{i}" type="mixed" route="{route}" depart="{step}" departLane="{lane}" departPos="0"/>', file=routes)
 
             print("</routes>", file=routes)
 
