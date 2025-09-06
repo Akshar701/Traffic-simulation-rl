@@ -339,7 +339,6 @@ def main():
     <input>
         <net-file value="intersection.net.xml"/>
         <route-files value="{os.path.basename(route_file)}"/>
-        <additional-files value="tls.tll.xml"/>
     </input>
     <time>
         <begin value="0"/>
