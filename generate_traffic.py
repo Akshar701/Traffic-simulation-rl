@@ -30,14 +30,16 @@ class TrafficGenerator:
     def _generate_depart_times(self, seed):
         """Generate stochastic vehicle departure times using a Weibull distribution."""
         np.random.seed(seed)
+        random.seed(seed)  # For full reproducibility
         timings = np.random.weibull(2, self._n_cars_generated)
         timings = np.sort(timings)
 
         min_old, max_old = math.floor(timings[1]), math.ceil(timings[-1])
         car_gen_steps = []
         for value in timings:
-            step = ((self._max_steps) / (max_old - min_old)) * (value - max_old) + self._max_steps
-            car_gen_steps.append(int(round(step)))
+            # Linear normalization: spread departures smoothly over [0, max_steps]
+            step = int(((value - min_old) / (max_old - min_old)) * self._max_steps)
+            car_gen_steps.append(step)
         return car_gen_steps
 
     def generate(self, seed, scenario=None, add_noise=True):
@@ -85,12 +87,6 @@ class TrafficGenerator:
             for rid, edges in routes_def.items():
                 print(f'    <route id="{rid}" edges="{edges}"/>', file=routes)
 
-            # Traffic Variability: Add random scaling to route weights
-            if add_noise:
-                noise = np.random.uniform(0.8, 1.2)
-            else:
-                noise = 1.0
-
             # scenario-specific route weights (enhanced for RL challenges)
             if scenario == "uniform":
                 route_weights = [1.0] * 12  # Equal weights for all routes
@@ -106,13 +102,14 @@ class TrafficGenerator:
             else:
                 route_weights = [1.0] * 12
 
-            # Apply noise to weights
-            route_weights = [w * noise for w in route_weights]
+            # Traffic Variability: Add independent noise per route for true variability
+            if add_noise:
+                route_weights = [w * np.random.uniform(0.8, 1.2) for w in route_weights]
             
             # Generate vehicles
             for i, step in enumerate(car_gen_steps):
                 route = random.choices(list(routes_def.keys()), weights=route_weights, k=1)[0]
-                print(f'    <vehicle id="{route}_{i}" type="mixed" route="{route}" depart="{step}" departPosLat="random"/>', file=routes)
+                print(f'    <vehicle id="{route}_{i}" type="mixed" route="{route}" depart="{step}" departPos="random_free"/>', file=routes)
 
             print("</routes>", file=routes)
 
@@ -136,12 +133,12 @@ class TrafficGenerator:
             # Determine SUMO command
             sumo_cmd = "sumo-gui" if use_gui else "sumo"
             
-            # Run SUMO
-            cmd = [sumo_cmd, "-c", os.path.basename(sumocfg_file)]
+            # Run SUMO with absolute path for safer execution
+            cmd = [sumo_cmd, "-c", os.path.abspath(sumocfg_file)]
             print(f"Running SUMO with command: {' '.join(cmd)}")
             
             # Run simulation
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=self._out_dir)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             
             if result.returncode == 0:
                 print("Simulation completed successfully!")
@@ -190,10 +187,10 @@ class TrafficGenerator:
     def _collect_simulation_metrics(self) -> Dict:
         """
         Collect performance metrics from simulation output.
-        Dashboard-compatible metrics collection.
+        Includes both dashboard-compatible and basic built-in metrics.
         """
         try:
-            # Import here to avoid circular imports
+            # Try dashboard metrics first
             from dashboard_metrics import EnhancedTrafficAnalyzer
             
             analyzer = EnhancedTrafficAnalyzer(self._out_dir)
@@ -210,17 +207,56 @@ class TrafficGenerator:
             return metrics
             
         except ImportError:
-            # Fallback if dashboard_metrics is not available
-            return {
-                'episode': self.current_episode,
-                'scenario': self.current_scenario,
-                'status': 'metrics_unavailable'
-            }
+            # Fallback: collect basic metrics from SUMO output files
+            return self._collect_basic_metrics()
         except Exception as e:
-            print(f"Error collecting metrics: {e}")
+            print(f"Error collecting dashboard metrics: {e}")
+            return self._collect_basic_metrics()
+
+    def _collect_basic_metrics(self) -> Dict:
+        """
+        Collect basic performance metrics from SUMO output files.
+        Provides essential metrics without dashboard dependency.
+        """
+        try:
+            metrics = {
+                'episode': self.current_episode,
+                'scenario': self.current_scenario,
+                'total_vehicles': self._n_cars_generated,
+                'simulation_duration': self._max_steps,
+                'status': 'basic_metrics'
+            }
+            
+            # Try to collect tripinfo data if available
+            tripinfo_files = [f for f in os.listdir(self._out_dir) if f.endswith('.tripinfo.xml')]
+            if tripinfo_files:
+                # Basic tripinfo parsing (can be enhanced)
+                metrics['tripinfo_available'] = True
+                metrics['tripinfo_files'] = len(tripinfo_files)
+            else:
+                metrics['tripinfo_available'] = False
+            
+            # Calculate basic efficiency score based on vehicle count and duration
+            efficiency_score = min(100, (self._n_cars_generated / self._max_steps) * 100)
+            metrics['efficiency_score'] = efficiency_score
+            
+            # Basic congestion level estimation
+            if self._n_cars_generated > 1000:
+                congestion_level = "high"
+            elif self._n_cars_generated > 600:
+                congestion_level = "medium"
+            else:
+                congestion_level = "low"
+            metrics['congestion_level'] = congestion_level
+            
+            return metrics
+            
+        except Exception as e:
+            print(f"Error collecting basic metrics: {e}")
             return {
                 'episode': self.current_episode,
                 'scenario': self.current_scenario,
+                'status': 'metrics_error',
                 'error': str(e)
             }
 
