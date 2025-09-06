@@ -25,9 +25,18 @@ class BenchmarkAnalyzer:
         self.summary_file = os.path.join(results_dir, "benchmark_summary.csv")
         self.routes_file = os.path.join(results_dir, "benchmark_routes.csv")
         
-        # Set up plotting style
-        plt.style.use('seaborn-v0_8')
+        # Set up plotting style with fallback
+        try:
+            plt.style.use('seaborn-v0_8')
+        except OSError:
+            try:
+                plt.style.use('seaborn')
+            except OSError:
+                plt.style.use('default')
+        
         sns.set_palette("husl")
+        plt.rcParams['figure.facecolor'] = 'white'
+        plt.rcParams['axes.facecolor'] = 'white'
         
     def load_results(self):
         """Load benchmark results from files"""

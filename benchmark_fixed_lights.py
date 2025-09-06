@@ -28,6 +28,9 @@ from collections import defaultdict
 import subprocess
 import traci
 import traci.constants as tc
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing as mp
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -39,7 +42,7 @@ from traci_manager import TraciManager
 class TrafficLightBenchmarker:
     """Comprehensive benchmarking system for traffic light performance"""
     
-    def __init__(self, output_dir="benchmark_results", num_runs=5, simulation_duration=3600):
+    def __init__(self, output_dir="benchmark_results", num_runs=5, simulation_duration=3600, parallel=False):
         """
         Initialize the benchmarker
         
@@ -47,14 +50,19 @@ class TrafficLightBenchmarker:
             output_dir: Directory to save benchmark results
             num_runs: Number of runs per scenario for statistical significance
             simulation_duration: Duration of each simulation in seconds (default: 1 hour)
+            parallel: Whether to run simulations in parallel (experimental)
         """
         self.output_dir = output_dir
         self.num_runs = num_runs
         self.simulation_duration = simulation_duration
         self.warmup_duration = 300  # 5 minutes warmup to handle transients
+        self.parallel = parallel
         
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
+        
+        # Setup logging
+        self._setup_logging()
         
         # Traffic scenarios to benchmark
         self.scenarios = ['uniform', 'tidal', 'congested', 'asymmetric']
@@ -69,6 +77,22 @@ class TrafficLightBenchmarker:
         
         # Initialize results storage
         self.results = defaultdict(list)
+        
+        # Track failed runs
+        self.failed_runs = []
+    
+    def _setup_logging(self):
+        """Setup logging for the benchmarker"""
+        log_file = os.path.join(self.output_dir, 'benchmark.log')
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
         
     def run_benchmark(self):
         """Run comprehensive benchmarks for all scenarios"""
@@ -95,16 +119,26 @@ class TrafficLightBenchmarker:
                 
                 # Run single simulation
                 run_results = self._run_single_simulation(scenario, run)
-                scenario_results.append(run_results)
                 
-                print(f"✅ (Travel time: {run_results['avg_travel_time']:.1f}s)")
+                if run_results is not None:
+                    scenario_results.append(run_results)
+                    print(f"✅ (Travel time: {run_results['overall']['avg_travel_time']:.1f}s)")
+                else:
+                    print(f"❌ Failed")
             
-            # Calculate statistics for this scenario
-            scenario_stats = self._calculate_scenario_statistics(scenario, scenario_results)
-            self.results[scenario] = scenario_stats
+            # Only calculate statistics if we have successful runs
+            if scenario_results:
+                # Calculate statistics for this scenario
+                scenario_stats = self._calculate_scenario_statistics(scenario, scenario_results)
+                self.results[scenario] = scenario_stats
+                
+                print(f"  📈 Average travel time: {scenario_stats['avg_travel_time_mean']:.1f} ± {scenario_stats['avg_travel_time_std']:.1f}s")
+                print(f"  🚗 Total throughput: {scenario_stats['total_throughput_mean']:.0f} ± {scenario_stats['total_throughput_std']:.0f} vehicles")
+                print(f"  ✅ Successful runs: {len(scenario_results)}/{self.num_runs}")
+            else:
+                print(f"  ❌ No successful runs for {scenario}")
+                self.logger.error(f"All runs failed for scenario {scenario}")
             
-            print(f"  📈 Average travel time: {scenario_stats['avg_travel_time_mean']:.1f} ± {scenario_stats['avg_travel_time_std']:.1f}s")
-            print(f"  🚗 Total throughput: {scenario_stats['total_throughput_mean']:.0f} ± {scenario_stats['total_throughput_std']:.0f} vehicles")
             print()
         
         # Save results
@@ -113,6 +147,12 @@ class TrafficLightBenchmarker:
         
         print("🎉 BENCHMARKING COMPLETED!")
         print(f"📊 Results saved to: {self.output_dir}/")
+        
+        if self.failed_runs:
+            print(f"⚠️  Failed runs: {len(self.failed_runs)}")
+            for failed_run in self.failed_runs:
+                print(f"   - {failed_run}")
+            print("   Check benchmark.log for details")
         
     def _generate_traffic_files(self):
         """Generate traffic route files for all scenarios"""
@@ -136,52 +176,91 @@ class TrafficLightBenchmarker:
     def _run_single_simulation(self, scenario, run_id):
         """Run a single simulation and collect metrics"""
         
-        # Create SUMO configuration
-        sumocfg_file = self._create_sumo_config(scenario, run_id)
+        self.logger.info(f"Starting simulation: {scenario} run {run_id}")
         
-        # Initialize TraCI
-        traci.start([
-            "sumo", "-c", sumocfg_file,
-            "--no-step-log", "--no-warnings", "true",
-            "--duration-log.statistics",
-            "--tripinfo-output", f"{self.output_dir}/{scenario}_run_{run_id}_tripinfo.xml",
-            "--summary-output", f"{self.output_dir}/{scenario}_run_{run_id}_summary.xml",
-            "--queue-output", f"{self.output_dir}/{scenario}_run_{run_id}_queue.xml",
-            "--emission-output", f"{self.output_dir}/{scenario}_run_{run_id}_emissions.xml"
-        ])
-        
-        # Initialize metrics collection
-        metrics = {
-            'travel_times': defaultdict(list),
-            'waiting_times': defaultdict(list),
-            'speeds': defaultdict(list),
-            'queue_lengths': defaultdict(list),
-            'delays': defaultdict(list),
-            'vehicle_counts': defaultdict(int),
-            'completed_vehicles': defaultdict(int),
-            'fuel_consumption': 0.0,
-            'co2_emissions': 0.0,
-            'junction_efficiency': defaultdict(list)
-        }
-        
-        step = 0
         try:
+            # Create SUMO configuration
+            sumocfg_file = self._create_sumo_config(scenario, run_id)
+            
+            # Initialize TraCI with better error handling
+            traci.start([
+                "sumo", "-c", sumocfg_file,
+                "--no-step-log", "--no-warnings", "true",
+                "--duration-log.statistics",
+                "--tripinfo-output", f"{self.output_dir}/{scenario}_run_{run_id}_tripinfo.xml",
+                "--summary-output", f"{self.output_dir}/{scenario}_run_{run_id}_summary.xml",
+                "--queue-output", f"{self.output_dir}/{scenario}_run_{run_id}_queue.xml",
+                "--emission-output", f"{self.output_dir}/{scenario}_run_{run_id}_emissions.xml"
+            ])
+            
+            # Initialize metrics collection
+            metrics = {
+                'travel_times': defaultdict(list),
+                'waiting_times': defaultdict(list),
+                'speeds': defaultdict(list),
+                'queue_lengths': defaultdict(list),
+                'delays': defaultdict(list),
+                'vehicle_counts': defaultdict(int),
+                'completed_vehicles': defaultdict(int),
+                'fuel_consumption': 0.0,
+                'co2_emissions': 0.0,
+                'junction_efficiency': defaultdict(list)
+            }
+            
+            step = 0
+            error_count = 0
+            max_errors = 100  # Maximum consecutive errors before giving up
+            
             while step < self.simulation_duration:
-                traci.simulationStep()
-                
-                # Skip warmup period for cleaner metrics
-                if step >= self.warmup_duration:
-                    self._collect_metrics(metrics, step)
-                
-                step += 1
-                
+                try:
+                    traci.simulationStep()
+                    
+                    # Skip warmup period for cleaner metrics
+                    if step >= self.warmup_duration:
+                        self._collect_metrics(metrics, step)
+                    
+                    step += 1
+                    error_count = 0  # Reset error count on successful step
+                    
+                except traci.exceptions.TraCIException as e:
+                    error_count += 1
+                    self.logger.warning(f"TraCI error at step {step}: {e}")
+                    
+                    if error_count >= max_errors:
+                        self.logger.error(f"Too many consecutive errors ({max_errors}), stopping simulation")
+                        break
+                    
+                    # Try to continue simulation
+                    try:
+                        traci.simulationStep()
+                        step += 1
+                    except:
+                        break
+                        
+                except Exception as e:
+                    self.logger.error(f"Unexpected error at step {step}: {e}")
+                    break
+            
+            self.logger.info(f"Simulation completed: {scenario} run {run_id} ({step} steps)")
+            
         except Exception as e:
-            print(f"⚠️  Simulation error at step {step}: {e}")
+            self.logger.error(f"Failed to start simulation {scenario} run {run_id}: {e}")
+            self.failed_runs.append(f"{scenario}_run_{run_id}")
+            return None
+            
         finally:
-            traci.close()
+            try:
+                traci.close()
+            except:
+                pass  # Ignore errors when closing
         
         # Process collected metrics
-        return self._process_metrics(metrics, scenario, run_id)
+        try:
+            return self._process_metrics(metrics, scenario, run_id)
+        except Exception as e:
+            self.logger.error(f"Failed to process metrics for {scenario} run {run_id}: {e}")
+            self.failed_runs.append(f"{scenario}_run_{run_id}")
+            return None
     
     def _create_sumo_config(self, scenario, run_id):
         """Create SUMO configuration file for the simulation"""
@@ -216,7 +295,7 @@ class TrafficLightBenchmarker:
     def _collect_metrics(self, metrics, step):
         """Collect metrics during simulation"""
         
-        # Get all vehicles
+        # Get all vehicles currently in simulation
         vehicle_ids = traci.vehicle.getIDList()
         
         for vehicle_id in vehicle_ids:
@@ -226,15 +305,21 @@ class TrafficLightBenchmarker:
                 if route_id not in self.route_mapping:
                     continue
                 
-                # Travel time and waiting time
+                # Travel time (total time in simulation)
                 travel_time = traci.vehicle.getTimeLoss(vehicle_id)
+                
+                # Waiting time (time spent waiting at traffic lights)
                 waiting_time = traci.vehicle.getWaitingTime(vehicle_id)
                 
                 # Speed
                 speed = traci.vehicle.getSpeed(vehicle_id)
                 
-                # Delay (time loss due to traffic conditions)
-                delay = traci.vehicle.getTimeLoss(vehicle_id)
+                # Delay (time loss due to traffic conditions - different from waiting time)
+                delay = traci.vehicle.getTimeLoss(vehicle_id) - waiting_time
+                
+                # Fuel consumption and emissions
+                fuel_consumption = traci.vehicle.getFuelConsumption(vehicle_id)
+                co2_emission = traci.vehicle.getCO2Emission(vehicle_id)
                 
                 # Store metrics
                 metrics['travel_times'][route_id].append(travel_time)
@@ -243,13 +328,32 @@ class TrafficLightBenchmarker:
                 metrics['delays'][route_id].append(delay)
                 metrics['vehicle_counts'][route_id] += 1
                 
-                # Check if vehicle completed its route
-                if traci.vehicle.getArrivedNumber() > 0:
-                    metrics['completed_vehicles'][route_id] += 1
+                # Track fuel and emissions per vehicle
+                if 'fuel_per_vehicle' not in metrics:
+                    metrics['fuel_per_vehicle'] = defaultdict(list)
+                    metrics['co2_per_vehicle'] = defaultdict(list)
+                
+                metrics['fuel_per_vehicle'][route_id].append(fuel_consumption)
+                metrics['co2_per_vehicle'][route_id].append(co2_emission)
                 
             except traci.exceptions.TraCIException:
                 # Vehicle may have left the simulation
                 continue
+        
+        # Handle completed vehicles properly - count per route
+        try:
+            arrived_vehicles = traci.simulation.getArrivedIDList()
+            for vehicle_id in arrived_vehicles:
+                try:
+                    route_id = traci.vehicle.getRouteID(vehicle_id)
+                    if route_id in self.route_mapping:
+                        metrics['completed_vehicles'][route_id] += 1
+                except traci.exceptions.TraCIException:
+                    # Vehicle already removed from simulation
+                    continue
+        except traci.exceptions.TraCIException:
+            # No arrived vehicles this step
+            pass
         
         # Collect queue lengths for each lane
         for lane_id in traci.lane.getIDList():
@@ -257,14 +361,23 @@ class TrafficLightBenchmarker:
                 queue_length = traci.lane.getLastStepHaltingNumber(lane_id)
                 metrics['queue_lengths'][lane_id].append(queue_length)
         
-        # Collect junction efficiency
+        # Collect junction efficiency metrics
         for junction_id in traci.junction.getIDList():
             if junction_id == 'C':  # Main intersection
-                # Get junction statistics
                 try:
-                    # This would need to be implemented based on SUMO version
-                    pass
-                except:
+                    # Get junction statistics
+                    junction_data = traci.junction.getContext(junction_id, tc.VAR_POSITION)
+                    
+                    # Calculate efficiency metrics
+                    total_vehicles = len(traci.vehicle.getIDList())
+                    waiting_vehicles = sum(1 for vid in traci.vehicle.getIDList() 
+                                         if traci.vehicle.getWaitingTime(vid) > 0)
+                    
+                    efficiency = 1.0 - (waiting_vehicles / max(total_vehicles, 1))
+                    metrics['junction_efficiency'][junction_id].append(efficiency)
+                    
+                except traci.exceptions.TraCIException:
+                    # Junction data not available
                     pass
     
     def _process_metrics(self, metrics, scenario, run_id):
@@ -286,29 +399,61 @@ class TrafficLightBenchmarker:
                     'avg_speed': np.mean(metrics['speeds'][route_id]) if metrics['speeds'][route_id] else 0,
                     'avg_delay': np.mean(metrics['delays'][route_id]) if metrics['delays'][route_id] else 0,
                     'throughput': metrics['completed_vehicles'][route_id],
-                    'vehicle_count': metrics['vehicle_counts'][route_id]
+                    'vehicle_count': metrics['vehicle_counts'][route_id],
+                    'max_queue_length': max(metrics['queue_lengths'].get(route_id, [0])) if metrics['queue_lengths'].get(route_id) else 0,
+                    'avg_queue_length': np.mean(metrics['queue_lengths'].get(route_id, [0])) if metrics['queue_lengths'].get(route_id) else 0
                 }
+                
+                # Add fuel and emissions data
+                if 'fuel_per_vehicle' in metrics and route_id in metrics['fuel_per_vehicle']:
+                    route_metrics['total_fuel_consumption'] = np.sum(metrics['fuel_per_vehicle'][route_id])
+                    route_metrics['avg_fuel_per_vehicle'] = np.mean(metrics['fuel_per_vehicle'][route_id])
+                    route_metrics['total_co2_emissions'] = np.sum(metrics['co2_per_vehicle'][route_id])
+                    route_metrics['avg_co2_per_vehicle'] = np.mean(metrics['co2_per_vehicle'][route_id])
+                else:
+                    route_metrics['total_fuel_consumption'] = 0
+                    route_metrics['avg_fuel_per_vehicle'] = 0
+                    route_metrics['total_co2_emissions'] = 0
+                    route_metrics['avg_co2_per_vehicle'] = 0
+                
                 processed['routes'][route_id] = route_metrics
         
         # Overall metrics
         all_travel_times = []
         all_waiting_times = []
         all_speeds = []
+        all_delays = []
         total_throughput = 0
+        total_fuel = 0
+        total_co2 = 0
+        all_queue_lengths = []
+        all_efficiency = []
         
         for route_metrics in processed['routes'].values():
             all_travel_times.append(route_metrics['avg_travel_time'])
             all_waiting_times.append(route_metrics['total_waiting_time'])
             all_speeds.append(route_metrics['avg_speed'])
+            all_delays.append(route_metrics['avg_delay'])
             total_throughput += route_metrics['throughput']
+            total_fuel += route_metrics['total_fuel_consumption']
+            total_co2 += route_metrics['total_co2_emissions']
+            all_queue_lengths.append(route_metrics['avg_queue_length'])
+        
+        # Junction efficiency
+        for junction_id, efficiency_values in metrics['junction_efficiency'].items():
+            all_efficiency.extend(efficiency_values)
         
         processed['overall'] = {
             'avg_travel_time': np.mean(all_travel_times) if all_travel_times else 0,
             'total_waiting_time': np.sum(all_waiting_times) if all_waiting_times else 0,
             'avg_speed': np.mean(all_speeds) if all_speeds else 0,
+            'avg_delay': np.mean(all_delays) if all_delays else 0,
             'total_throughput': total_throughput,
-            'fuel_consumption': metrics['fuel_consumption'],
-            'co2_emissions': metrics['co2_emissions']
+            'fuel_consumption': total_fuel,
+            'co2_emissions': total_co2,
+            'avg_queue_length': np.mean(all_queue_lengths) if all_queue_lengths else 0,
+            'max_queue_length': max(all_queue_lengths) if all_queue_lengths else 0,
+            'junction_efficiency': np.mean(all_efficiency) if all_efficiency else 0
         }
         
         return processed
