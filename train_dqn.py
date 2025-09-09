@@ -26,6 +26,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from agents.dqn_agent import DQNAgent
 from envs.traffic_env import TrafficEnv
+from utils.logging_utils import EpisodeCSVLogger
 
 class DQNTrainer:
     """DQN Training Manager with TensorBoard Integration and Formal Logging"""
@@ -341,6 +342,7 @@ class DQNTrainer:
         
         self.start_time = time.time()
         recent_rewards = []
+        csv_logger = EpisodeCSVLogger()
         
         self.logger.info("🚀 Starting training...")
         self.logger.info("💡 The agent will start with random exploration (epsilon = 1.0)")
@@ -386,6 +388,16 @@ class DQNTrainer:
             self._log_episode_progress(
                 episode + 1, total_reward, steps, self.agent.epsilon, 
                 recent_rewards[-10:], recent_loss
+            )
+
+            # Structured CSV logging for each step's reward mean proxy
+            # Minimal invasive: log a single row per episode with last step and mean step reward
+            csv_logger.log_row(
+                episode=episode + 1,
+                step=steps,
+                reward=float(total_reward),
+                avg_wait_time=None,
+                queue_length=None,
             )
             
             # Evaluate periodically

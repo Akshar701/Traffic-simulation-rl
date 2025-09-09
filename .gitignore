@@ -1,3 +1,17 @@
+__pycache__/
+.venv/
+.idea/
+.vscode/
+.DS_Store
+*.log
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+trained_models/*
+!trained_models/.gitkeep
+training_results/*
+!training_results/.gitkeep
 # Python
 __pycache__/
 *.py[cod]
