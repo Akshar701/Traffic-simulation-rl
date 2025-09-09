@@ -219,6 +219,9 @@ class DQNAgent:
             # Take action
             next_state, reward, done, info = env.step(action)
             
+            # Clip reward to prevent extreme values that destabilize training
+            reward = np.clip(reward, -10.0, 10.0)
+            
             # Store experience
             self.remember(state, action, reward, next_state, done)
             

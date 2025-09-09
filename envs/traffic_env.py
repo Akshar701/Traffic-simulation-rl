@@ -95,12 +95,13 @@ class TrafficEnv(gym.Env):
             7: {"name": "EW_Right_Yellow", "duration": 4, "description": "East-West right turn yellow"}
         }
         
-        # Action mapping: actions 0,1,2,3 correspond to phases 0,2,4,6 (skipping yellow phases)
+        # Action mapping: actions 0,1,2,3 correspond to main phases (0,2,4,6)
+        # This creates a logical sequence: NS_Straight -> EW_Straight -> NS_Right -> EW_Right
         self.action_to_phase = {
-            0: 0,  # Action 0 -> Phase 0 (NS_Left_Straight)
-            1: 2,  # Action 1 -> Phase 2 (EW_Left_Straight)
-            2: 4,  # Action 2 -> Phase 4 (NS_Right)
-            3: 6   # Action 3 -> Phase 6 (EW_Right)
+            0: 0,  # Action 0 -> Phase 0 (NS_Left_Straight) - North-South main flow
+            1: 2,  # Action 1 -> Phase 2 (EW_Left_Straight) - East-West main flow  
+            2: 4,  # Action 2 -> Phase 4 (NS_Right) - North-South right turns
+            3: 6   # Action 3 -> Phase 6 (EW_Right) - East-West right turns
         }
         
         # Episode tracking

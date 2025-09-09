@@ -276,16 +276,16 @@ def calculate_reward(current_waiting_time: float,
                     avg_speed: float = 0.0,
                     vehicle_count: int = 0) -> float:
     """
-    Simple reward function: R = (prev_waiting_time - curr_waiting_time) - 0.1 * total_queue_length
+    Fixed reward function with proper scaling: R = normalized_waiting_change - queue_penalty + speed_bonus
     
     Args:
         current_waiting_time: Current cumulative waiting time
         current_queue_length: Current total queue length
-        avg_speed: Average vehicle speed (unused in simple reward)
-        vehicle_count: Number of vehicles (unused in simple reward)
+        avg_speed: Average vehicle speed
+        vehicle_count: Number of vehicles
         
     Returns:
-        float: Simple reward value
+        float: Scaled reward value between -2 and 2
     """
     # Get previous waiting time from the reward calculator
     prev_waiting_time = reward_calculator.previous_waiting_time
@@ -295,13 +295,30 @@ def calculate_reward(current_waiting_time: float,
         reward_calculator.previous_waiting_time = current_waiting_time
         return 0.0
     
-    # Calculate reward: positive if waiting time decreases, small penalty for large queues
-    reward = (prev_waiting_time - current_waiting_time) - 0.1 * current_queue_length
+    # 1. Waiting time change reward (normalized to prevent huge values)
+    waiting_change = prev_waiting_time - current_waiting_time
+    # Normalize by dividing by max expected change (scale to -1 to 1)
+    waiting_reward = np.clip(waiting_change / 100.0, -1.0, 1.0)
+    
+    # 2. Queue penalty (scaled appropriately)
+    queue_penalty = -0.1 * min(current_queue_length / 10.0, 1.0)  # Max penalty of -0.1
+    
+    # 3. Speed bonus (encourage higher speeds)
+    speed_bonus = 0.0
+    if avg_speed > 0:
+        speed_bonus = min(avg_speed / 15.0, 0.5)  # Max bonus of 0.5
+    
+    # 4. Throughput bonus (small reward for having vehicles)
+    throughput_bonus = min(vehicle_count / 100.0, 0.2)  # Max bonus of 0.2
+    
+    # Total reward (clipped to reasonable range)
+    total_reward = waiting_reward + queue_penalty + speed_bonus + throughput_bonus
+    total_reward = np.clip(total_reward, -2.0, 2.0)
     
     # Update previous waiting time for next calculation
     reward_calculator.previous_waiting_time = current_waiting_time
     
-    return reward
+    return total_reward
 
 def simple_reward(prev_waiting_time: float, curr_waiting_time: float, total_queue_length: int) -> float:
     """
