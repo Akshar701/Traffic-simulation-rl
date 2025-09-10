@@ -16,8 +16,12 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import numpy as np
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from traci_manager import TraciManager, TrafficState
-from live_metrics import MetricsCollector, LiveMetrics
+from dashboard.live_metrics import MetricsCollector, LiveMetrics
 from signal_controller import SignalController, SignalDecision
 
 class LiveDashboard:
